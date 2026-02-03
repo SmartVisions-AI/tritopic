@@ -1,0 +1,344 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tritopic"
+version = "1.1.4"
+description = "Tri-Modal Graph Topic Modeling with Iterative Refinement - A state-of-the-art topic modeling library that consistently outperforms BERTopic and traditional approaches by combining semantic embeddings, lexical similarity, and metadata context with advanced graph-based clustering."
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.9"
+authors = [
+    {name = "Roman Egger", email = "roman.egger@smartvisions.at"}
+]
+maintainers = [
+    {name = "Roman Egger", email = "roman.egger@smartvisions.at"}
+]
+keywords = [
+    "topic-modeling",
+    "nlp",
+    "natural-language-processing",
+    "machine-learning",
+    "deep-learning",
+    "text-mining",
+    "text-analysis",
+    "document-clustering",
+    "clustering",
+    "embeddings",
+    "bert",
+    "sentence-transformers",
+    "leiden-algorithm",
+    "graph-clustering",
+    "community-detection",
+    "unsupervised-learning",
+    "multi-view-learning",
+    "consensus-clustering",
+    "iterative-refinement",
+    "topic-extraction",
+    "keyword-extraction",
+    "ctf-idf",
+    "archetypes",
+    "representative-documents",
+    "multilingual",
+    "german",
+    "tourism",
+    "hotel-reviews",
+    "social-media-analysis",
+    "content-analysis",
+    "qualitative-research",
+    "computational-linguistics",
+    "bertopic-alternative"
+]
+
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Education",
+    "Intended Audience :: Information Technology",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Scientific/Engineering :: Information Analysis",
+    "Topic :: Text Processing",
+    "Topic :: Text Processing :: Linguistic",
+    "Topic :: Text Processing :: Indexing",
+    "Topic :: Text Processing :: General",
+    "Topic :: Software Development :: Libraries",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Natural Language :: English",
+    "Natural Language :: German",
+    "Typing :: Typed",
+]
+
+dependencies = [
+    "numpy>=1.21.0",
+    "scipy>=1.7.0",
+    "scikit-learn>=1.0.0",
+    "pandas>=1.3.0",
+    "sentence-transformers>=2.2.0",
+    "leidenalg>=0.9.0",
+    "python-igraph>=0.10.0",
+    "plotly>=5.0.0",
+    "tqdm>=4.62.0",
+    "umap-learn>=0.5.0",
+]
+
+[project.optional-dependencies]
+# LLM-powered topic labeling (Claude, GPT-4)
+llm = [
+    "anthropic>=0.18.0",
+    "openai>=1.0.0",
+]
+
+# Language detection for multilingual corpora
+multilingual = [
+    "langdetect>=1.0.9",
+]
+
+# Chinese language support
+chinese = [
+    "jieba>=0.42.1",
+]
+
+# Japanese language support
+japanese = [
+    "fugashi>=1.2.0",
+    "unidic-lite>=1.0.8",
+]
+
+# Korean language support
+korean = [
+    "konlpy>=0.6.0",
+]
+
+# Thai language support
+thai = [
+    "pythainlp>=4.0.0",
+]
+
+# Extended visualization (wordclouds, etc.)
+viz = [
+    "matplotlib>=3.5.0",
+    "seaborn>=0.12.0",
+    "wordcloud>=1.9.0",
+]
+
+# Gensim coherence metrics
+evaluation = [
+    "gensim>=4.0.0",
+]
+
+# Development dependencies
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "pytest-xdist>=3.0.0",
+    "black>=23.0.0",
+    "isort>=5.12.0",
+    "flake8>=6.0.0",
+    "mypy>=1.0.0",
+    "pre-commit>=3.0.0",
+    "ruff>=0.1.0",
+]
+
+# Documentation
+docs = [
+    "sphinx>=6.0.0",
+    "sphinx-rtd-theme>=1.2.0",
+    "sphinx-autodoc-typehints>=1.22.0",
+    "myst-parser>=1.0.0",
+    "nbsphinx>=0.9.0",
+]
+
+# Full installation (recommended)
+full = [
+    "langdetect>=1.0.9",
+    "anthropic>=0.18.0",
+    "openai>=1.0.0",
+    "jieba>=0.42.1",
+    "matplotlib>=3.5.0",
+    "seaborn>=0.12.0",
+    "wordcloud>=1.9.0",
+    "gensim>=4.0.0",
+]
+
+# Everything including dev tools
+all = [
+    "langdetect>=1.0.9",
+    "anthropic>=0.18.0",
+    "openai>=1.0.0",
+    "jieba>=0.42.1",
+    "fugashi>=1.2.0",
+    "unidic-lite>=1.0.8",
+    "matplotlib>=3.5.0",
+    "seaborn>=0.12.0",
+    "wordcloud>=1.9.0",
+    "gensim>=4.0.0",
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "black>=23.0.0",
+    "isort>=5.12.0",
+    "mypy>=1.0.0",
+    "sphinx>=6.0.0",
+    "sphinx-rtd-theme>=1.2.0",
+]
+
+[project.urls]
+Homepage = "https://www.smartvisions.at"
+
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["tritopic*"]
+exclude = ["tests*", "docs*", "examples*", "benchmarks*"]
+
+[tool.setuptools.package-data]
+tritopic = ["py.typed", "*.pyi"]
+
+# ============================================================
+# Development Tools Configuration
+# ============================================================
+
+[tool.black]
+line-length = 100
+target-version = ['py39', 'py310', 'py311', 'py312']
+include = '\.pyi?$'
+exclude = '''
+/(
+    \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.nox
+  | \.tox
+  | \.venv
+  | venv
+  | _build
+  | buck-out
+  | build
+  | dist
+  | __pycache__
+)/
+'''
+
+[tool.isort]
+profile = "black"
+line_length = 100
+known_first_party = ["tritopic"]
+known_third_party = ["numpy", "pandas", "scipy", "sklearn", "sentence_transformers", "plotly", "igraph", "leidenalg"]
+skip = [".venv", "venv", "build", "dist", ".git", "__pycache__"]
+skip_gitignore = true
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # Pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "UP",  # pyupgrade
+]
+ignore = [
+    "E501",  # line too long (handled by black)
+    "B008",  # do not perform function calls in argument defaults
+    "C901",  # too complex
+]
+
+[tool.mypy]
+python_version = "3.9"
+warn_return_any = true
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+disallow_untyped_defs = false
+ignore_missing_imports = true
+show_error_codes = true
+pretty = true
+
+[[tool.mypy.overrides]]
+module = [
+    "sentence_transformers.*",
+    "umap.*",
+    "leidenalg.*",
+    "igraph.*",
+    "plotly.*",
+    "sklearn.*",
+    "scipy.*",
+    "pandas.*",
+    "numpy.*",
+    "langdetect.*",
+    "jieba.*",
+    "gensim.*",
+]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "-v",
+    "-ra",
+    "--tb=short",
+    "--strict-markers",
+    "--strict-config",
+]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+    "gpu: marks tests that require GPU",
+]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::UserWarning",
+    "ignore::FutureWarning",
+]
+
+[tool.coverage.run]
+source = ["tritopic"]
+branch = true
+parallel = true
+omit = [
+    "*/tests/*",
+    "*/__init__.py",
+    "*/cli.py",
+]
+
+[tool.coverage.paths]
+source = ["tritopic"]
+
+[tool.coverage.report]
+precision = 2
+show_missing = true
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "def __str__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "if typing.TYPE_CHECKING:",
+    "@abstractmethod",
+    "@abc.abstractmethod",
+]
