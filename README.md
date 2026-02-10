@@ -1,4 +1,4 @@
-# TriTopic
+# TriTopic v 2.1.0
 
 **Tri-Modal Graph Topic Modeling with Iterative Refinement**
 
