@@ -1,4 +1,4 @@
-# TriTopic v. 2.2.0
+# TriTopic 2.3.0
 
 **Tri-Modal Graph Topic Modeling with Iterative Refinement**
 
@@ -23,6 +23,9 @@ A state-of-the-art topic modeling library that fuses semantic embeddings, lexica
 - [Configuration Reference](#configuration-reference)
 - [Dimensionality Reduction](#dimensionality-reduction)
 - [Soft Topic Assignments](#soft-topic-assignments)
+- [Cross-Lingual Support](#cross-lingual-support)
+- [Hierarchical Topics](#hierarchical-topics)
+- [Per-Document Topic Analysis](#per-document-topic-analysis)
 - [Outlier Reduction](#outlier-reduction)
 - [Topic Merging](#topic-merging)
 - [Keyword Extraction](#keyword-extraction)
@@ -65,6 +68,9 @@ On top of this multi-view graph, TriTopic applies **consensus Leiden clustering*
 | **Dimensionality reduction** | Reduces high-dimensional embeddings (384-768d) to ~10d with UMAP or PaCMAP before graph construction, improving neighbor quality |
 | **100% corpus coverage** | Zero outliers by default -- every document is assigned to a topic, unlike HDBSCAN-based approaches |
 | **Soft topic assignments** | Computes per-document probability distributions over all topics, not just hard labels |
+| **Cross-lingual support** | Built-in stopwords for English, German, French, and Spanish. `language="multilingual"` auto-selects the `BAAI/bge-m3` embedding model |
+| **Hierarchical topics** | Build multi-resolution topic hierarchies with `build_hierarchy()`, split individual topics with `divide()`, and visualize the tree structure |
+| **Per-document topic analysis** | Inspect which topics each document belongs to with `get_document_topics()`, compute topic co-occurrence with `topic_overlap_matrix()` |
 | **Post-fit outlier reduction** | Reassigns outlier documents using centroid similarity or neighbor voting after the model is fitted |
 | **Hierarchical topic merging** | Iteratively merges the most similar topic pairs to reach a target count, or manually merges specific topics |
 | **Multiple keyword methods** | c-TF-IDF, BM25, and KeyBERT keyword extraction with automatic diversity |
@@ -259,6 +265,9 @@ All parameters are set through `TriTopicConfig` or as constructor overrides:
 from tritopic import TriTopic, TriTopicConfig
 
 config = TriTopicConfig(
+    # --- Language ---
+    language="english",                    # "english", "german", "french", "spanish", "multilingual"
+
     # --- Embedding ---
     embedding_model="all-MiniLM-L6-v2",   # sentence-transformers model name
     embedding_batch_size=32,               # encoding batch size
@@ -297,6 +306,9 @@ config = TriTopicConfig(
     n_keywords=10,                         # keywords per topic
     n_representative_docs=5,               # representative docs per topic
     keyword_method="ctfidf",               # "ctfidf", "bm25", or "keybert"
+
+    # --- Soft Assignment ---
+    soft_assignment_method="centroid",     # "centroid" or "graph"
 
     # --- Outlier Handling ---
     outlier_threshold=0.1,                 # cosine similarity threshold for transform()
@@ -400,6 +412,157 @@ print(proba)
 ```
 
 **How it works:** Cosine similarity between document embeddings and topic centroid embeddings, followed by softmax normalization. Probabilities are recomputed automatically after any post-fit operation (outlier reduction, topic merging).
+
+You can also use graph-based soft assignments, which derive probabilities from a document's graph neighborhood:
+
+```python
+model = TriTopic(soft_assignment_method="graph")
+model.fit(documents)
+```
+
+---
+
+## Cross-Lingual Support
+
+TriTopic supports topic modeling in multiple languages. The `language` parameter controls stopword filtering and, when set to `"multilingual"`, automatically selects an appropriate embedding model.
+
+### Single language
+
+```python
+# German corpus
+model = TriTopic(language="german")
+model.fit_transform(german_documents)
+
+# French corpus
+model = TriTopic(language="french")
+model.fit_transform(french_documents)
+```
+
+Built-in stopwords are provided for English, German, French, and Spanish. Stopwords are used during keyword extraction to filter out common function words.
+
+### Multilingual corpus
+
+```python
+# Mixed-language corpus — auto-selects BAAI/bge-m3 embeddings
+model = TriTopic(language="multilingual")
+model.fit_transform(mixed_language_documents)
+```
+
+When `language="multilingual"` and the default embedding model is used, TriTopic automatically switches to `BAAI/bge-m3` (1024 dimensions), which supports 100+ languages. Stopword filtering is disabled in multilingual mode to avoid language-specific bias.
+
+You can still use a custom embedding model with multilingual mode:
+
+```python
+model = TriTopic(language="multilingual", embedding_model="your/custom-model")
+```
+
+### Supported languages
+
+| Language | Stopwords | Auto-model |
+|---|---|---|
+| `"english"` (default) | sklearn built-in | `all-MiniLM-L6-v2` |
+| `"german"` | Built-in (250+ words) | `all-MiniLM-L6-v2` |
+| `"french"` | Built-in | `all-MiniLM-L6-v2` |
+| `"spanish"` | Built-in | `all-MiniLM-L6-v2` |
+| `"multilingual"` | Disabled | `BAAI/bge-m3` (auto) |
+
+---
+
+## Hierarchical Topics
+
+TriTopic can build a multi-resolution topic hierarchy, allowing you to explore topics at different levels of granularity.
+
+### Build a hierarchy
+
+```python
+model.fit(documents)
+
+# Build a 3-level hierarchy (coarse → medium → fine)
+hierarchy = model.build_hierarchy(n_levels=3)
+print(hierarchy)  # TopicHierarchy(levels=3, topics_per_level=[3, 8, 15])
+```
+
+The hierarchy is constructed by clustering at multiple Leiden resolutions (automatically spaced from coarse to fine). Each fine-grained topic is linked to its coarse-grained parent via majority-vote assignment.
+
+### Navigate the hierarchy
+
+```python
+# Access topics at a specific level
+coarse_topics = hierarchy.cut(0)   # broad themes
+fine_topics = hierarchy.cut(2)     # specific sub-topics
+
+# Traverse the tree
+for root in hierarchy.roots:
+    print(f"{root.node_id}: {root.keywords[:3]}")
+    for child in root.children:
+        print(f"  {child.node_id}: {child.keywords[:3]}")
+
+# Look up a specific node
+node = hierarchy.get_node("L0_3")
+```
+
+### Explicit resolution levels
+
+```python
+# Provide your own resolution values (coarse → fine)
+hierarchy = model.build_hierarchy(resolution_levels=[0.25, 1.0, 4.0])
+```
+
+### Divide a single topic
+
+Split one topic into finer sub-topics without rebuilding the full hierarchy:
+
+```python
+subtopics = model.divide(topic_id=0, n_subtopics=3)
+for st in subtopics:
+    print(f"  Sub-topic {st.topic_id}: {st.keywords[:5]}")
+```
+
+This extracts the subgraph for the given topic, runs Leiden at higher resolution, and updates `model.labels_` in-place. Keywords, centroids, and probabilities are refreshed automatically.
+
+### Visualize the hierarchy
+
+```python
+model.build_hierarchy(n_levels=3)
+fig = model.visualize_hierarchy_tree()
+fig.show()
+```
+
+---
+
+## Per-Document Topic Analysis
+
+Inspect which topics each document belongs to and how topics overlap across the corpus.
+
+### Top topics for a document
+
+```python
+# Get the top 3 topics for document 0
+topics = model.get_document_topics(doc_idx=0, top_n=3)
+for topic_id, probability in topics:
+    print(f"  Topic {topic_id}: {probability:.4f}")
+
+# Use graph-based method explicitly
+topics = model.get_document_topics(doc_idx=0, top_n=3, method="graph")
+```
+
+### Topic overlap matrix
+
+Compute how often topics co-occur across documents. A topic is considered "active" for a document when its probability exceeds the threshold:
+
+```python
+overlap = model.topic_overlap_matrix(threshold=0.1)
+print(overlap)  # Symmetric DataFrame (n_topics x n_topics)
+```
+
+The diagonal shows how many documents strongly belong to each topic. Off-diagonal values reveal topic pairs that frequently co-occur.
+
+### Visualize overlap
+
+```python
+fig = model.visualize_overlap(threshold=0.1)
+fig.show()
+```
 
 ---
 
@@ -845,9 +1008,15 @@ The main model class. Follows the scikit-learn fit/transform pattern.
 | `get_representative_docs(topic_id, n_docs?)` | Get `(index, text)` tuples for a topic's most central documents. |
 | `generate_labels(labeler, topics?)` | Generate LLM labels for topics. |
 | `evaluate()` | Compute coherence, diversity, stability, and outlier ratio. |
+| `build_hierarchy(resolution_levels?, n_levels?)` | Build multi-resolution topic hierarchy. Returns `TopicHierarchy`. |
+| `divide(topic_id, n_subtopics?)` | Split a single topic into finer sub-topics. Returns `list[TopicInfo]`. |
+| `get_document_topics(doc_idx, top_n?, method?)` | Get top-N topics for a document with probabilities. |
+| `topic_overlap_matrix(threshold?)` | Topic co-occurrence matrix as DataFrame. |
 | `visualize(method?, show_outliers?, ...)` | 2D document scatter plot. |
 | `visualize_topics(n_keywords?, ...)` | Keyword bar charts per topic. |
-| `visualize_hierarchy(...)` | Topic dendrogram. |
+| `visualize_hierarchy(...)` | Topic dendrogram (centroid distances). |
+| `visualize_hierarchy_tree(...)` | Multi-level hierarchy tree (requires `build_hierarchy()`). |
+| `visualize_overlap(threshold?, ...)` | Topic overlap heatmap. |
 | `save(path)` | Pickle model to disk (includes all state, reducer, probabilities). |
 | `TriTopic.load(path)` | Class method to load a saved model. |
 
@@ -863,6 +1032,7 @@ The main model class. Follows the scikit-learn fit/transform pattern.
 | `topics_` | `list[TopicInfo]` | List of `TopicInfo` objects with keywords, scores, centroids. |
 | `documents_` | `list[str]` | Stored training documents. |
 | `graph_` | `igraph.Graph` | The final fused graph. |
+| `hierarchy_` | `TopicHierarchy \| None` | Multi-resolution hierarchy (set by `build_hierarchy()`). |
 
 ### TopicInfo
 
@@ -888,6 +1058,8 @@ The main model class. Follows the scikit-learn fit/transform pattern.
 | `GraphBuilder` | `tritopic.core.graph_builder` | Build kNN, mutual kNN, SNN, hybrid, lexical, and metadata graphs. |
 | `ConsensusLeiden` | `tritopic.core.clustering` | Leiden clustering with consensus and resolution search. |
 | `HDBSCANClusterer` | `tritopic.core.clustering` | Alternative HDBSCAN clustering. |
+| `TopicNode` | `tritopic.core.hierarchy` | A node in the topic hierarchy with keywords, children, and document indices. |
+| `TopicHierarchy` | `tritopic.core.hierarchy` | Multi-resolution topic tree with `cut()`, `flatten()`, `get_node()` methods. |
 | `KeywordExtractor` | `tritopic.core.keywords` | c-TF-IDF, BM25, and KeyBERT keyword extraction. |
 | `KeyphraseExtractor` | `tritopic.core.keywords` | Multi-word keyphrase extraction (YAKE). |
 | `LLMLabeler` | `tritopic.labeling.llm_labeler` | Generate labels via Claude or GPT-4. |
@@ -925,7 +1097,7 @@ Any model from the [sentence-transformers](https://www.sbert.net/) library works
 | `all-MiniLM-L6-v2` | 384 | Fast | Good | Default. Best speed/quality tradeoff. |
 | `all-mpnet-base-v2` | 768 | Medium | Better | Higher quality, 2x slower. |
 | `BAAI/bge-base-en-v1.5` | 768 | Medium | Best | State-of-the-art for English. |
-| `BAAI/bge-m3` | 1024 | Slow | Best | Multilingual support. |
+| `BAAI/bge-m3` | 1024 | Slow | Best | Multilingual support. Auto-selected with `language="multilingual"`. |
 | `hkunlp/instructor-large` | 768 | Slow | Best | Task-specific with instructions. |
 
 ---
@@ -946,6 +1118,8 @@ Any model from the [sentence-transformers](https://www.sbert.net/) library works
 | **Topic merging** | Hierarchical | Hierarchical + manual merge |
 | **Keyword extraction** | c-TF-IDF | c-TF-IDF, BM25, or KeyBERT |
 | **LLM labels** | Via representation model | Built-in Claude/GPT-4 support |
+| **Cross-lingual** | Manual model selection | Built-in `language` param with auto-model selection |
+| **Hierarchical topics** | Hierarchical topic modeling | Multi-resolution hierarchy + single-topic `divide()` |
 | **NMI (benchmark avg.)** | 0.513 | **0.575 (+12.1%)** |
 | **Coherence (benchmark avg.)** | 0.233 | **0.341 (+46.4%)** |
 
@@ -998,10 +1172,10 @@ TriTopic achieves the **highest NMI on every single dataset** while maintaining 
 ## Citation
 
 ```bibtex
-@software{tritopic2025,
+@software{tritopic2026,
   author = {Egger, Roman},
   title = {TriTopic: Tri-Modal Graph Topic Modeling with Iterative Refinement},
-  year = {2025},
+  year = {2026},
   publisher = {PyPI},
   url = {https://github.com/SmartVisions-AI/tritopic}
 }
