@@ -1,8 +1,8 @@
-# TriTopic v2.2 — Complete Technical Documentation
+# TriTopic v2.3.0 — Complete Technical Documentation
 
 ## Tri-Modal Graph-Based Topic Modeling with Iterative Refinement
 
-**Version 2.2.0** | February 2026
+**Version 2.3.0** | February 2026
 
 ---
 
@@ -49,10 +49,13 @@
    - 8.3 [KeyBERT](#83-keybert)
 9. [Prediction on New Documents](#9-prediction-on-new-documents)
 10. [Soft Topic Probabilities](#10-soft-topic-probabilities)
-11. [Evaluation Metrics](#11-evaluation-metrics)
-12. [Complete Configuration Reference](#12-complete-configuration-reference)
-13. [Key Design Decisions & Rationale](#13-key-design-decisions--rationale)
-14. [Benchmark Results](#14-benchmark-results)
+11. [Cross-Lingual Support](#11-cross-lingual-support)
+12. [Hierarchical Topic Organization](#12-hierarchical-topic-organization)
+13. [Per-Document Topic Analysis](#13-per-document-topic-analysis)
+14. [Evaluation Metrics](#14-evaluation-metrics)
+15. [Complete Configuration Reference](#15-complete-configuration-reference)
+16. [Key Design Decisions & Rationale](#16-key-design-decisions--rationale)
+17. [Benchmark Results](#17-benchmark-results)
 
 ---
 
@@ -662,7 +665,134 @@ probabilities = softmax(similarities × temperature, axis=1)    # temperature de
 
 ---
 
-## 11. Evaluation Metrics
+## 11. Cross-Lingual Support
+
+TriTopic supports topic modeling in multiple languages via the `language` parameter. This controls stopword filtering and, when set to `"multilingual"`, automatically selects a multilingual embedding model.
+
+**Supported languages:**
+
+| Language | Stopwords | Default Embedding Model |
+|----------|-----------|------------------------|
+| `"english"` (default) | sklearn built-in | `all-MiniLM-L6-v2` |
+| `"german"` | Built-in list (250+ words) | `all-MiniLM-L6-v2` |
+| `"french"` | Built-in list | `all-MiniLM-L6-v2` |
+| `"spanish"` | Built-in list | `all-MiniLM-L6-v2` |
+| `"multilingual"` | None (disabled) | `BAAI/bge-m3` (auto-selected) |
+
+**Usage:**
+
+```python
+# German topic modeling
+model = TriTopic(language="german")
+model.fit_transform(german_documents)
+
+# Multilingual corpus (auto-selects bge-m3)
+model = TriTopic(language="multilingual")
+model.fit_transform(mixed_language_documents)
+
+# Multilingual with custom embedding model
+model = TriTopic(language="multilingual", embedding_model="custom/model")
+```
+
+**How it works:**
+
+1. The `language` parameter is propagated to the `GraphBuilder` (for TF-IDF stopword filtering) and `KeywordExtractor` (for keyword stopword removal).
+2. When `language="multilingual"` and no custom embedding model is specified, TriTopic automatically switches to `BAAI/bge-m3`, a state-of-the-art multilingual embedding model supporting 100+ languages.
+3. For multilingual mode, stopword filtering is disabled since no single stopword list covers all languages. The embedding model handles semantic separation.
+
+---
+
+## 12. Hierarchical Topic Organization
+
+TriTopic supports hierarchical topic exploration through two complementary methods: multi-resolution hierarchy building and single-topic division.
+
+### 12.1 Multi-Resolution Hierarchy: `build_hierarchy()`
+
+Builds a tree of topics at multiple granularity levels by re-clustering the existing graph at different Leiden resolution values.
+
+```python
+hierarchy = model.build_hierarchy(n_levels=3)
+print(hierarchy)  # TopicHierarchy(levels=3, topics_per_level=[3, 8, 15])
+
+# Access specific levels
+coarse_topics = hierarchy.cut(0)   # Broad themes
+fine_topics = hierarchy.cut(2)     # Specific sub-topics
+
+# Navigate the tree
+for root in hierarchy.roots:
+    print(f"{root.node_id}: {root.keywords[:3]}")
+    for child in root.children:
+        print(f"  {child.node_id}: {child.keywords[:3]}")
+```
+
+**Algorithm:**
+1. Auto-generate resolution levels geometrically spaced between `resolution/4` and `resolution*4`.
+2. Cluster at each resolution using Leiden.
+3. Link levels via majority-vote: each fine-grained node is assigned to the coarse-grained parent that contains the majority of its documents.
+4. Extract keywords for each node.
+
+### 12.2 Topic Division: `divide()`
+
+Splits a single topic into finer sub-topics by extracting its subgraph and re-clustering at higher resolution.
+
+```python
+subtopics = model.divide(topic_id=0, n_subtopics=3)
+for st in subtopics:
+    print(f"  Sub-topic {st.topic_id}: {st.keywords[:5]}")
+```
+
+**Note:** `divide()` modifies `model.labels_` in place and refreshes all downstream state (keywords, centroids, probabilities).
+
+### 12.3 API Reference
+
+**TopicNode:**
+- `node_id` — Unique identifier (e.g., `"L0_3"`)
+- `is_leaf()` — True if no children
+- `get_subtopics(depth)` — Descendants up to *depth* levels
+- `flatten()` — This node and all descendants
+
+**TopicHierarchy:**
+- `n_levels` — Number of resolution levels
+- `cut(depth)` — All nodes at a given depth
+- `flatten()` — Every node in the hierarchy
+- `get_node(node_id)` — Look up by ID
+
+**Visualization:** `model.visualize_hierarchy_tree()` renders the hierarchy as an interactive tree diagram (requires `build_hierarchy()` first).
+
+---
+
+## 13. Per-Document Topic Analysis
+
+Beyond hard topic assignments, TriTopic provides fine-grained per-document analysis: which topics does a specific document belong to, and how do topics overlap across the corpus?
+
+### 13.1 Per-Document Topic Distribution: `get_document_topics()`
+
+Returns the top-N topics with probabilities for a single document.
+
+```python
+topics = model.get_document_topics(doc_idx=0, top_n=3)
+for topic_id, probability in topics:
+    print(f"  Topic {topic_id}: {probability:.4f}")
+```
+
+Supports both `"centroid"` (default) and `"graph"` methods via the `method` parameter or the global `soft_assignment_method` config.
+
+### 13.2 Topic Co-Occurrence: `topic_overlap_matrix()`
+
+Computes how often pairs of topics co-occur within documents. For each document, topics whose probability exceeds the threshold are considered "active". The matrix counts co-occurrences across all documents.
+
+```python
+overlap = model.topic_overlap_matrix(threshold=0.1)
+print(overlap)  # Symmetric DataFrame (n_topics × n_topics)
+```
+
+The diagonal shows how many documents strongly belong to each topic. Off-diagonal values reveal topic pairs that frequently co-occur in the same documents.
+
+**Visualization:** `model.visualize_overlap(threshold=0.1)` renders the overlap matrix as an interactive heatmap.
+
+---
+
+## 14. Evaluation Metrics
 
 ```python
 metrics = model.evaluate()
@@ -678,13 +808,14 @@ Returns:
 
 ---
 
-## 12. Complete Configuration Reference
+## 15. Complete Configuration Reference
 
 | Parameter | Default | Description | Rationale |
 |-----------|---------|-------------|-----------|
 | **Embedding** | | | |
 | `embedding_model` | `"all-MiniLM-L6-v2"` | Sentence-Transformer model | Best speed/quality tradeoff |
 | `embedding_batch_size` | `32` | Encoding batch size | Memory control |
+| `language` | `"english"` | Language for stopwords and auto-model selection | Supports english, german, french, spanish, multilingual |
 | **Dimensionality Reduction** | | | |
 | `use_dim_reduction` | `True` | Reduce before graph building | Dramatically improves kNN quality |
 | `reduced_dims` | `10` | Target dimensions | 10 retains most structure; <5 loses too much |
@@ -718,13 +849,14 @@ Returns:
 | `outlier_threshold` | `0.35` | Min similarity for topic assignment | Lower → more assignments, potentially noisier |
 | **Probability** | | | |
 | `softmax_temperature` | `5.0` | Softmax sharpness | 5.0 gives confident but not extreme probabilities |
+| `soft_assignment_method` | `"centroid"` | Method for soft probabilities (`"centroid"` or `"graph"`) | Centroid is faster; graph uses neighborhood structure |
 | **Misc** | | | |
 | `random_state` | `42` | Random seed | Reproducibility baseline |
 | `verbose` | `True` | Print progress | |
 
 ---
 
-## 13. Key Design Decisions & Rationale
+## 16. Key Design Decisions & Rationale
 
 ### Why Leiden over HDBSCAN?
 
@@ -764,7 +896,7 @@ The resolution parameter directly controls Leiden's granularity. Higher resoluti
 
 ---
 
-## 14. Benchmark Results
+## 17. Benchmark Results
 
 Evaluated on 4 standard datasets, 3 seeds per configuration, 5 topic counts per dataset (60 runs per model).
 
