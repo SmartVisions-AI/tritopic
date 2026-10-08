@@ -1,15 +1,15 @@
-# TriTopic 2.3.0
+# TriTopic 2.4.0
 
 **Tri-Modal Graph Topic Modeling with Iterative Refinement**
 
-A state-of-the-art topic modeling library that fuses semantic embeddings, lexical similarity, and metadata context through multi-view graph construction, consensus Leiden clustering, and iterative refinement. TriTopic produces stable, interpretable topics and **outperforms BERTopic, LDA, and NMF on all standard benchmarks**.
+A state-of-the-art topic modeling library that fuses semantic embeddings, lexical similarity, and metadata context through multi-view graph construction, consensus Leiden clustering, and iterative refinement. TriTopic produces stable, interpretable topics and **outperforms BERTopic in head-to-head benchmarks with identical embeddings**.
 
 [![PyPI version](https://badge.fury.io/py/tritopic.svg)](https://badge.fury.io/py/tritopic)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
 [![Downloads](https://static.pepy.tech/badge/tritopic)](https://pepy.tech/project/tritopic)
 
-> **Mean NMI 0.575** (vs. BERTopic 0.513, NMF 0.416, LDA 0.299) | **100% corpus coverage** (0% outliers) | **Best NMI on all 4 benchmark datasets**
+> **NMI 0.581 vs. 0.439** (BERTopic, same embeddings) | **2.2x keyword coherence** | **0% outliers** (BERTopic: 18%) | **7x more stable across seeds** | better NMI in **18 of 20** dataset/k settings
 
 ---
 
@@ -37,6 +37,7 @@ A state-of-the-art topic modeling library that fuses semantic embeddings, lexica
 - [Architecture](#architecture)
 - [Comparison with BERTopic](#comparison-with-bertopic)
 - [Benchmarks](#benchmarks)
+- [Changelog](#changelog)
 - [Citation](#citation)
 - [License](#license)
 
@@ -52,7 +53,7 @@ TriTopic solves this by **fusing three complementary views** of the document cor
 2. **Lexical view** -- TF-IDF similarity captures surface-level word patterns
 3. **Metadata view** -- optional categorical/numerical features add domain context
 
-On top of this multi-view graph, TriTopic applies **consensus Leiden clustering** (multiple runs aggregated via co-occurrence matrices) and **iterative refinement** (embeddings are pulled toward cluster centroids and re-clustered). The result: topics that are more accurate, more coherent, more stable, and assign every document (zero outliers by default).
+On top of this multi-view graph, TriTopic applies **consensus Leiden clustering** (multiple runs aggregated via edge-level co-occurrence) and **iterative refinement** (embeddings are pulled toward cluster centroids and re-clustered). The result: topics that are more accurate, more coherent, more stable, and assign every document (zero outliers by default; only clusters smaller than `min_cluster_size` become outliers).
 
 ---
 
@@ -62,9 +63,9 @@ On top of this multi-view graph, TriTopic applies **consensus Leiden clustering*
 |---|---|
 | **Multi-view graph fusion** | Combines semantic embeddings, TF-IDF lexical similarity, and optional metadata into a single graph, avoiding the "embedding blur" that single-view models suffer from |
 | **Mutual kNN + SNN graphs** | Eliminates noise bridges between unrelated documents using bidirectional neighbor checks and shared-neighbor weighting |
-| **Consensus Leiden clustering** | Runs the Leiden algorithm multiple times and merges results via a co-occurrence matrix, producing dramatically more stable topics than single-run approaches |
+| **Consensus Leiden clustering** | Runs the Leiden algorithm multiple times and merges results via edge-level co-occurrence (Lancichinetti & Fortunato), producing far more stable topics than single-run approaches while scaling linearly with the number of graph edges |
 | **Iterative refinement** | Alternates between clustering and embedding refinement, pulling documents toward their topic centroids to sharpen boundaries |
-| **Bidirectional resolution search** | Automatically finds the Leiden resolution parameter that produces the target number of topics |
+| **Automatic granularity** | `n_topics="auto"` picks the Leiden resolution whose topics have the most coherent keywords, so the topic count adapts to the corpus; `n_topics=k` finds the resolution for exactly *k* topics |
 | **Dimensionality reduction** | Reduces high-dimensional embeddings (384-768d) to ~10d with UMAP or PaCMAP before graph construction, improving neighbor quality |
 | **100% corpus coverage** | Zero outliers by default -- every document is assigned to a topic, unlike HDBSCAN-based approaches |
 | **Soft topic assignments** | Computes per-document probability distributions over all topics, not just hard labels |
@@ -73,7 +74,7 @@ On top of this multi-view graph, TriTopic applies **consensus Leiden clustering*
 | **Per-document topic analysis** | Inspect which topics each document belongs to with `get_document_topics()`, compute topic co-occurrence with `topic_overlap_matrix()` |
 | **Post-fit outlier reduction** | Reassigns outlier documents using centroid similarity or neighbor voting after the model is fitted |
 | **Hierarchical topic merging** | Iteratively merges the most similar topic pairs to reach a target count, or manually merges specific topics |
-| **Multiple keyword methods** | c-TF-IDF, BM25, and KeyBERT keyword extraction with automatic diversity |
+| **Multiple keyword methods** | Coverage-weighted c-TF-IDF (default), BM25, and KeyBERT keyword extraction |
 | **LLM-powered labels** | Generates human-readable topic names via Claude or GPT-4 |
 | **Interactive visualizations** | 2D document maps, keyword bar charts, dendrograms, similarity heatmaps, and temporal topic evolution via Plotly |
 | **scikit-learn compatible** | Familiar `fit()` / `transform()` / `fit_transform()` API |
@@ -245,15 +246,15 @@ Documents
 
 **Step 2 - Lexical matrix:** TF-IDF with n-grams captures surface-level word patterns that embeddings may miss.
 
-**Step 3 - Metadata graph (optional):** Categorical and numerical metadata fields create additional edges between related documents.
+**Step 3 - Metadata view (optional):** Categorical and numerical metadata fields are encoded per document. In the fusion step they *reweight* existing semantic/lexical edges (documents with matching metadata get stronger ties); they do not add new edges.
 
-**Step 4 - Multi-view graph fusion:** The semantic kNN graph (built on reduced embeddings), lexical graph, and metadata graph are combined with configurable weights into a single igraph Graph. The semantic graph can use mutual kNN, SNN, or a hybrid of both.
+**Step 4 - Multi-view graph fusion:** The semantic kNN graph (built on reduced embeddings with Euclidean distance and a self-tuning Gaussian kernel), the lexical graph, and the metadata view are combined with configurable weights into a single igraph Graph. With `n_topics="auto"`, TriTopic then scans Leiden resolutions on this graph and keeps the coarsest one whose topics have near-maximal keyword coherence. The semantic graph can use mutual kNN, SNN, or a hybrid of both.
 
-**Step 5 - Consensus Leiden clustering:** The Leiden algorithm runs multiple times (default: 10) with different seeds. A co-occurrence matrix records how often each pair of documents lands in the same cluster. Hierarchical clustering on this matrix produces a consensus partition that is far more stable than any single run. Clusters below `min_cluster_size` are marked as outliers (-1).
+**Step 5 - Consensus Leiden clustering:** The Leiden algorithm runs multiple times (default: 10) with different seeds. For every graph edge, TriTopic records how often its two documents land in the same cluster. Edges with low agreement are dropped, the rest are reweighted by agreement, and Leiden is re-run on this consensus graph until the runs agree. This produces a partition that is more stable than any single run, in O(edges) instead of O(n²) memory. Clusters below `min_cluster_size` are marked as outliers (-1).
 
-**Step 6 - Iterative refinement:** Embeddings are softly blended toward their topic centroid (20% pull), then the graph and clustering are re-run. This loop continues until the Adjusted Rand Index between consecutive iterations exceeds the convergence threshold (default: 0.95), or until `max_iterations` is reached. During iterative refinement, the dimensionality reducer transforms the refined embeddings for each new graph-building pass.
+**Step 6 - Iterative refinement:** The embeddings used for graph building (the reduced embeddings if dimensionality reduction is on) are softly blended toward their topic centroid (30% pull, decaying to 10%; core members are pulled more than borderline ones), then the graph and clustering are re-run. This loop continues until the Adjusted Rand Index between consecutive iterations exceeds the convergence threshold (default: 0.95), or until `max_iterations` is reached. The lexical graph is built once and reused.
 
-**Step 7 - Keywords and centroids:** c-TF-IDF (or BM25/KeyBERT) extracts representative keywords per topic. Topic centroids are computed as the mean embedding of each topic's documents. Soft probabilities are computed via cosine similarity to centroids passed through softmax.
+**Step 7 - Keywords and centroids:** Coverage-weighted c-TF-IDF (or BM25/KeyBERT) extracts representative keywords per topic; the corpus is tokenized once and the counts are shared with the lexical view. Topic centroids are computed as the mean embedding of each topic's documents. Soft probabilities are computed via cosine similarity to centroids passed through softmax.
 
 ---
 
@@ -278,10 +279,11 @@ config = TriTopicConfig(
     dim_reduction_method="umap",           # "umap" or "pacmap"
     umap_n_neighbors=15,                   # UMAP/PaCMAP neighbor count
     umap_min_dist=0.0,                     # 0.0 optimized for clustering
+    reduced_metric="euclidean",            # kNN metric on reduced embeddings
 
     # --- Graph Construction ---
     n_neighbors=15,                        # k for kNN graph
-    metric="cosine",                       # distance metric
+    metric="cosine",                       # kNN metric on full embeddings (no dim reduction)
     graph_type="hybrid",                   # "knn", "mutual_knn", "snn", "hybrid"
     snn_weight=0.5,                        # SNN weight in hybrid mode
 
@@ -293,7 +295,12 @@ config = TriTopicConfig(
     metadata_weight=0.2,                   # weight for metadata graph
 
     # --- Clustering ---
-    resolution=1.0,                        # Leiden resolution (higher = more topics)
+    resolution=0.3,                        # Leiden resolution (start for n_topics=k; used for "auto" if auto_resolution=False)
+    auto_resolution=True,                  # n_topics="auto": choose resolution by keyword coherence
+    resolution_range=None,                 # search range for auto_resolution (default (0.01, 1.0))
+    auto_resolution_steps=15,              # resolutions scanned
+    auto_resolution_tolerance=0.05,        # pick the coarsest within 5% of the best coherence
+    auto_resolution_max_share=0.5,         # ignore partitions where one topic holds >50% of docs
     n_consensus_runs=10,                   # number of Leiden runs for consensus
     min_cluster_size=5,                    # clusters smaller than this become outliers
 
@@ -311,7 +318,8 @@ config = TriTopicConfig(
     soft_assignment_method="centroid",     # "centroid" or "graph"
 
     # --- Outlier Handling ---
-    outlier_threshold=0.1,                 # cosine similarity threshold for transform()
+    outlier_threshold=0.35,                # cosine similarity threshold for transform()
+    softmax_temperature=5.0,               # higher = sharper topic probabilities
 
     # --- Misc ---
     random_state=42,
@@ -320,6 +328,12 @@ config = TriTopicConfig(
 
 model = TriTopic(config=config)
 ```
+
+### Topic granularity
+
+- `n_topics="auto"` (default): TriTopic scans `auto_resolution_steps` Leiden resolutions, extracts keywords for each candidate partition, and keeps the coarsest resolution whose mean keyword coherence (NPMI) is within `auto_resolution_tolerance` of the best. Partitions in which one topic holds more than `auto_resolution_max_share` of the documents are skipped (very coarse partitions score high NPMI on generic words). The scan is available as `model.resolution_search_` (resolution, n_topics, coherence), the chosen value as `model.resolution_`.
+- `n_topics=k`: bisection over the resolution until exactly *k* topics remain (merging down if needed).
+- Fixed resolution: `TriTopicConfig(auto_resolution=False, resolution=...)`.
 
 **Quick overrides** without creating a config object:
 
@@ -360,14 +374,14 @@ model.fit(documents)
 
 # Reduced embeddings are stored alongside full embeddings
 print(model.reduced_embeddings_.shape)  # (n_docs, 10)
-print(model.embeddings_.shape)          # (n_docs, 384)  full embeddings kept
+print(model.embeddings_.shape)          # (n_docs, 384)  full embeddings kept (unrefined)
 ```
 
 **How it works:**
 
-- Reduced embeddings are used only for graph construction (kNN neighbor search)
+- Reduced embeddings are used only for graph construction (kNN neighbor search, Euclidean distance -- UMAP/PaCMAP output is a Euclidean layout, so cosine angles around its arbitrary origin are not meaningful)
 - Full-dimensional embeddings are used for centroid computation, keyword extraction, representative docs, and similarity calculations
-- During iterative refinement, refined embeddings are re-projected through the fitted reducer at each iteration
+- Iterative refinement operates directly on the reduced embeddings (no re-projection through the reducer)
 - The fitted reducer is saved with `model.save()` so `transform()` on new documents works correctly
 
 **When to disable it:**
@@ -568,7 +582,7 @@ fig.show()
 
 ## Outlier Reduction
 
-Leiden clustering combined with small-cluster removal can produce 20-40% outliers. `reduce_outliers()` reassigns them post-fit.
+Clusters smaller than `min_cluster_size` are marked as outliers (-1); with the default settings this is rare. `reduce_outliers()` reassigns them post-fit.
 
 ### Strategy: embeddings (default)
 
@@ -578,7 +592,7 @@ Each outlier is assigned to the topic whose centroid is most similar, if the sim
 model.fit(documents)
 print(f"Outliers before: {(model.labels_ == -1).sum()}")
 
-# Default threshold = config.outlier_threshold (0.1)
+# Default threshold = config.outlier_threshold (0.35)
 model.reduce_outliers(strategy="embeddings")
 print(f"Outliers after: {(model.labels_ == -1).sum()}")
 
@@ -615,7 +629,7 @@ model.reduce_topics(5)
 print(f"Topics after: {len([t for t in model.topics_ if t.topic_id != -1])}")
 ```
 
-At each step, the two most similar centroids are found, and the smaller topic is relabeled to the larger one. After all merges complete, keywords and centroids are re-extracted from scratch.
+At each step, the two most similar centroids are found (similarity is mildly penalized for very unequal topic sizes), and the smaller topic is relabeled to the larger one. After all merges complete, keywords and centroids are re-extracted.
 
 ### Manual: merge specific topics
 
@@ -637,7 +651,11 @@ TriTopic supports three keyword extraction methods:
 
 ### c-TF-IDF (default)
 
-Class-based TF-IDF treats all documents in a topic as a single "class document" and scores terms by their distinctiveness for that topic compared to the corpus. This is the same approach used by BERTopic.
+Class-based TF-IDF treats all documents in a topic as a single "class document". TriTopic weights the term frequency by *document coverage*:
+
+`score(t) = IDF(t) * sqrt(tf_share(t) * coverage(t))`
+
+where `tf_share` is the share of the topic's tokens that are *t* and `coverage` the fraction of the topic's documents containing *t*. Term frequency alone favours words repeated in a few long documents; coverage alone favours boilerplate. The geometric mean keeps terms that are both frequent and spread across the topic (+45% NPMI coherence over plain c-TF-IDF on the dev benchmarks). Tokens must start with two letters, so numbers and underscores (`000`, `__`) never become keywords.
 
 ```python
 model.config.keyword_method = "ctfidf"
@@ -645,7 +663,7 @@ model.config.keyword_method = "ctfidf"
 
 ### BM25
 
-BM25 scoring is more robust to document length variations than TF-IDF:
+Ranks terms by their average BM25 weight within the topic's documents relative to the corpus average, times log(1 + frequency). More robust to document length variations than TF-IDF:
 
 ```python
 model.config.keyword_method = "bm25"
@@ -694,7 +712,7 @@ model.fit(documents)
 labeler = LLMLabeler(
     provider="anthropic",
     api_key="sk-ant-...",
-    model="claude-3-haiku-20240307",   # fast and cheap
+    model="claude-haiku-4-5",          # fast and cheap (default)
     language="english",                 # output language
     domain_hint="technology news",      # optional domain context
 )
@@ -809,18 +827,21 @@ Returns a dictionary with:
 
 | Metric | Range | Description |
 |---|---|---|
-| `coherence_mean` | -1 to 1 | Average NPMI coherence across topics (higher = more coherent keywords) |
+| `coherence_mean` | -1 to 1 | Average NPMI coherence across topics, whole corpus as reference (higher = more coherent keywords) |
 | `coherence_std` | 0+ | Standard deviation of coherence across topics |
 | `diversity` | 0 to 1 | Proportion of unique keywords across all topics (higher = more distinct topics) |
 | `stability` | -1 to 1 | Average pairwise ARI across consensus runs (higher = more reproducible) |
 | `n_topics` | 1+ | Number of non-outlier topics |
 | `outlier_ratio` | 0 to 1 | Fraction of documents labeled as outliers |
 
+Coherence is computed on document-level co-occurrence over the **whole corpus**, with the same analyzer as keyword extraction (bigram keywords are counted; pairs that never co-occur score -1). Values are not comparable with versions before 2.4.0, which used only each topic's own documents as reference and therefore reported inflated scores.
+
 Additional metrics are available as standalone functions:
 
 ```python
 from tritopic.utils.metrics import (
     compute_coherence,
+    compute_coherence_batch,   # many topics, one pass over the corpus
     compute_diversity,
     compute_stability,
     compute_silhouette,
@@ -874,7 +895,7 @@ model.fit(documents, embeddings=embeddings)
 
 ### Metadata-enhanced topics
 
-Documents with shared metadata (source, category, date) get additional graph edges:
+Documents with shared metadata (source, category, date) get stronger ties in the graph:
 
 ```python
 import pandas as pd
@@ -891,16 +912,17 @@ model.config.metadata_weight = 0.2
 model.fit(documents, metadata=metadata)
 ```
 
-Categorical columns create edges between documents with matching values. Numerical columns create edges between documents with similar values (similarity > 0.8 after normalization).
+Metadata reweights edges that already exist in the semantic/lexical graph; it never adds new ones. Per edge, the metadata similarity is the average over columns of: exact match for categorical columns (strings, categories, booleans), and `1 - |difference|` for numerical/datetime columns after min-max normalization (counted only if > 0.8). Connecting *every* pair of documents with the same category would create O(n²) edges and let the metadata dominate the topics.
 
 ### Target number of topics
 
-Use `n_topics_target` to automatically find the Leiden resolution that produces a specific number of topics:
+Use `n_topics` to automatically find the Leiden resolution that produces a specific number of topics:
 
 ```python
-model = TriTopic(n_topics_target=10)
+model = TriTopic(n_topics=10)
 model.fit(documents)
-# TriTopic uses bidirectional resolution search to find ~10 topics
+# Bisection over the resolution (log-space, counting only clusters >=
+# min_cluster_size); merges down if it overshoots
 ```
 
 ### Finding the optimal resolution
@@ -914,9 +936,10 @@ from tritopic.core.clustering import ConsensusLeiden
 clusterer = ConsensusLeiden()
 optimal = clusterer.find_optimal_resolution(
     graph=model.graph_,
-    resolution_range=(0.5, 2.0),
+    resolution_range=(0.05, 2.0),
     n_steps=10,
     target_n_topics=15,       # optional: aim for ~15 topics
+    min_cluster_size=5,       # only count clusters that become topics
 )
 print(f"Optimal resolution: {optimal}")
 
@@ -1026,8 +1049,11 @@ The main model class. Follows the scikit-learn fit/transform pattern.
 |---|---|---|
 | `labels_` | `np.ndarray` | Hard topic assignment per document. -1 = outlier. |
 | `probabilities_` | `np.ndarray` | Soft assignments, shape `(n_docs, n_topics)`. Rows sum to ~1. |
-| `embeddings_` | `np.ndarray` | Full-dimensional document embeddings (refined if iterative). |
-| `reduced_embeddings_` | `np.ndarray` | Low-dimensional embeddings used for graph building. |
+| `embeddings_` | `np.ndarray` | Full-dimensional document embeddings (refined only if iterative refinement runs without dim reduction). |
+| `original_embeddings_` | `np.ndarray` | Unrefined embeddings; used for centroids, probabilities, outlier reduction, and merging. |
+| `reduced_embeddings_` | `np.ndarray` | Low-dimensional embeddings used for graph building (refined if iterative). |
+| `resolution_` | `float` | Leiden resolution used by `fit()` (chosen automatically with `n_topics="auto"`). |
+| `resolution_search_` | `list[tuple]` | Auto-resolution scan: (resolution, n_topics, coherence). |
 | `topic_embeddings_` | `np.ndarray` | Centroid embedding per topic, shape `(n_topics, embed_dim)`. |
 | `topics_` | `list[TopicInfo]` | List of `TopicInfo` objects with keywords, scores, centroids. |
 | `documents_` | `list[str]` | Stored training documents. |
@@ -1082,11 +1108,11 @@ The main model class. Follows the scikit-learn fit/transform pattern.
 
 ### Consensus clustering
 
-Running Leiden once is sensitive to random initialization. TriTopic runs it `n_consensus_runs` times (default: 10) with different seeds and builds a co-occurrence matrix recording how often each document pair was assigned to the same cluster. Hierarchical clustering (average linkage) on this matrix produces the final partition, selected by maximizing the average ARI with all individual runs. The stability score (average pairwise ARI across runs) quantifies how reproducible the clustering is.
+Running Leiden once is sensitive to random initialization. TriTopic runs it `n_consensus_runs` times (default: 10) with different seeds. For every graph edge it records the fraction of runs in which both endpoints share a cluster (Lancichinetti & Fortunato, 2012). Edges below 50% agreement are dropped (each node keeps its most consistent edge), the rest are reweighted by agreement, and Leiden is re-run on this consensus graph until all runs agree or the consensus graph stops changing; the run with the highest average ARI to the others is returned. This needs only O(edges) memory. The stability score (average pairwise ARI across the initial runs) quantifies how reproducible the clustering is.
 
 ### Iterative refinement
 
-After an initial clustering pass, document embeddings are softly blended toward their topic centroid: `refined = 0.8 * original + 0.2 * centroid`, then L2-normalized. The full pipeline (graph + clustering) re-runs on the refined embeddings. This process converges when consecutive partitions have ARI >= 0.95 (configurable). The effect is tighter, more separated topic clusters.
+After an initial clustering pass, the graph-building embeddings are softly blended toward their topic centroid: `refined = (1 - b) * x + b * centroid`, where `b` decays from 0.3 to 0.1 over the iterations and is scaled down for documents far from the centroid. The semantic graph and clustering re-run on the refined embeddings. This process converges when consecutive partitions have ARI >= 0.95 (configurable). The effect is tighter, more separated topic clusters.
 
 ### Supported embedding models
 
@@ -1112,7 +1138,7 @@ Any model from the [sentence-transformers](https://www.sbert.net/) library works
 | **Stability** | Low (varies between runs) | High (consensus + stability score) |
 | **Input signals** | Embeddings only | Semantic + Lexical + Metadata |
 | **Refinement** | None | Iterative embedding refinement |
-| **Coverage** | ~80% (19.2% outliers avg.) | **100%** (0% outliers) |
+| **Coverage** | ~82% (18.4% outliers avg.) | **100%** (0% outliers) |
 | **Soft assignments** | Via HDBSCAN probabilities | Cosine similarity + softmax |
 | **Outlier reduction** | 4 strategies | 2 strategies (embeddings, neighbors) |
 | **Topic merging** | Hierarchical | Hierarchical + manual merge |
@@ -1120,52 +1146,105 @@ Any model from the [sentence-transformers](https://www.sbert.net/) library works
 | **LLM labels** | Via representation model | Built-in Claude/GPT-4 support |
 | **Cross-lingual** | Manual model selection | Built-in `language` param with auto-model selection |
 | **Hierarchical topics** | Hierarchical topic modeling | Multi-resolution hierarchy + single-topic `divide()` |
-| **NMI (benchmark avg.)** | 0.513 | **0.575 (+12.1%)** |
-| **Coherence (benchmark avg.)** | 0.233 | **0.341 (+46.4%)** |
+| **NMI (benchmark avg., fixed k)** | 0.439 | **0.581 (+32%)** |
+| **Coherence (strict NPMI, fixed k)** | 0.117 (tuned) | **0.263 (2.2x)** |
+| **Seed stability (NMI spread)** | 0.105 | **0.014** |
 
 ---
 
 ## Benchmarks
 
-Evaluated on four standard text classification datasets against BERTopic, LDA (scikit-learn), and NMF (scikit-learn). Each configuration was run with 3 random seeds across multiple topic counts (k). Metrics: NMI against ground-truth labels, NPMI coherence, and coverage (1 - outlier fraction).
+Head-to-head comparison with BERTopic 0.17.4 on the four datasets of the original TriTopic benchmark
+(20 Newsgroups 2,000 docs, BBC News 1,225, AG News 2,000, arXiv 2,000), 5 topic counts per dataset plus
+automatic mode, 3 seeds each.
 
-### Overall Results
+- **Same embeddings for every model** (`all-MiniLM-L6-v2`, pre-computed once per dataset).
+- **BERTopic default** and **BERTopic tuned** (its documented keyword best practice:
+  `CountVectorizer(stop_words="english", ngram_range=(1, 2), min_df=2)` +
+  `ClassTfidfTransformer(reduce_frequent_words=True)`); UMAP seed fixed for reproducibility.
+- **No tuning on the evaluation data**: all 2.4 design decisions were made on disjoint development splits
+  (20NG test, BBC test, AG News train sample, arXiv validation); the evaluation splits were run once.
+- **Metrics**: NMI/ARI on all documents (outliers form one class); strict NPMI over the whole corpus (pairs that
+  never co-occur score -1); "2.3 benchmark" NPMI = the lenient coherence of the previous benchmark; fit time with
+  pre-computed embeddings, runs executed sequentially on one machine.
 
-| Model | Mean NMI | Mean Coherence (NPMI) | Mean Coverage | Wins (NMI) |
+#### Fixed topic count (k from the paper grid)
+
+| Model | NMI | ARI | NPMI (strict) | NPMI (2.3 benchmark) | Diversity | Outliers | Fit time (s) |
+|---|---|---|---|---|---|---|---|
+| **TriTopic 2.4** | 0.581 | 0.438 | 0.263 | 0.355 | 0.94 | 0.0% | 9.8 |
+| TriTopic 2.3 | 0.581 | 0.436 | 0.212 | 0.343 | 0.92 | 0.0% | 44.3 |
+| BERTopic (default) | 0.439 | 0.285 | 0.048 | 0.212 | 0.44 | 18.4% | 9.9 |
+| BERTopic (tuned) | 0.439 | 0.285 | 0.117 | 0.294 | 0.89 | 18.4% | 16.6 |
+
+#### Automatic topic count (`n_topics="auto"` / BERTopic default)
+
+| Model | NMI | ARI | NPMI (strict) | NPMI (2.3 benchmark) | Diversity | Outliers | Fit time (s) | Topics found |
+|---|---|---|---|---|---|---|---|---|
+| **TriTopic 2.4** | 0.560 | 0.398 | 0.299 | 0.397 | 0.94 | 0.0% | 11.4 | 21.4 |
+| TriTopic 2.3 | 0.528 | 0.302 | 0.200 | 0.391 | 0.90 | 0.0% | 36.7 | 30.0 |
+| BERTopic (default) | 0.443 | 0.247 | 0.109 | 0.263 | 0.54 | 18.4% | 8.3 | 26.8 |
+| BERTopic (tuned) | 0.443 | 0.247 | 0.123 | 0.387 | 0.89 | 18.4% | 11.7 | 26.8 |
+
+#### NMI per dataset (fixed k)
+
+| Dataset | **TriTopic 2.4** | TriTopic 2.3 | BERTopic (default) | BERTopic (tuned) |
 |---|---|---|---|---|
-| **TriTopic** | **0.575** | **0.341** | **1.000** | **4/4 datasets** |
-| BERTopic | 0.513 | 0.233 | 0.808 | 0/4 |
-| NMF | 0.416 | 0.330 | 1.000 | 0/4 |
-| LDA | 0.299 | 0.161 | 1.000 | 0/4 |
+| 20 Newsgroups | 0.529 | **0.530** | 0.264 | 0.264 |
+| AG News | 0.525 | **0.527** | 0.377 | 0.377 |
+| arXiv | **0.566** | 0.565 | 0.450 | 0.450 |
+| BBC News | **0.702** | 0.701 | 0.663 | 0.663 |
 
-TriTopic achieves the **highest NMI on every single dataset** while maintaining 100% corpus coverage (zero outliers). BERTopic's HDBSCAN leaves 19.2% of documents unassigned on average.
+#### Seed stability (fixed k): NMI spread across 3 seeds
 
-### Per-Dataset NMI
+| Model | Mean spread | Worst spread |
+|---|---|---|
+| **TriTopic 2.4** | 0.014 | 0.046 |
+| TriTopic 2.3 | 0.014 | 0.048 |
+| BERTopic (default) | 0.105 | 0.318 |
+| BERTopic (tuned) | 0.105 | 0.318 |
 
-| Dataset | Docs | k range | TriTopic | BERTopic | NMF | LDA |
-|---|---|---|---|---|---|---|
-| 20 Newsgroups | 2,000 | 10-50 | **0.532** | 0.519 | 0.319 | 0.158 |
-| BBC News | 1,225 | 3-20 | **0.702** | 0.642 | 0.648 | 0.505 |
-| AG News | 2,000 | 3-20 | **0.527** | 0.380 | 0.191 | 0.027 |
-| Arxiv | 2,000 | 5-25 | **0.540** | 0.511 | 0.505 | 0.508 |
+Against BERTopic (default and tuned), TriTopic 2.4 has the better NMI in **18 of 20** dataset/k combinations.
 
-### Per-Dataset Coherence (NPMI)
+**Where TriTopic does not lead:** on BBC News, BERTopic has the higher ARI for k = 5-20 (NMI is close), and on
+short texts BERTopic is about 1-2 s per run faster. In automatic mode TriTopic tends to find more topics than
+there are classes on AG News and BBC; pass `n_topics` if you know the granularity you need.
 
-| Dataset | TriTopic | BERTopic | NMF | LDA |
-|---|---|---|---|---|
-| 20 Newsgroups | **0.413** | 0.223 | 0.374 | 0.256 |
-| BBC News | **0.380** | 0.082 | 0.336 | 0.154 |
-| AG News | 0.269 | 0.161 | **0.325** | 0.092 |
-| Arxiv | 0.303 | **0.466** | 0.277 | 0.150 |
+Reproduce with `python benchmarks/compare_bertopic.py --pkg . --models tritopic,bertopic,bertopic_tuned --out results.csv`,
+then `python benchmarks/summarize.py results.csv` and `python benchmarks/results_to_markdown.py tables.md results.csv`.
 
-### Methodology
+> Earlier releases quoted mean NMI 0.575 vs. 0.513 for BERTopic. That benchmark gave BERTopic
+> `all-mpnet-base-v2` embeddings while TriTopic used MiniLM, and its coherence skipped word pairs that never
+> co-occur; those figures are superseded by the table above.
 
-- All embeddings: `all-MiniLM-L6-v2` (384 dimensions)
-- BERTopic: default HDBSCAN settings with UMAP reduction
-- NMF / LDA: scikit-learn implementations with TF-IDF input
-- TriTopic: default settings (hybrid graph, consensus Leiden, iterative refinement)
-- 3 random seeds per configuration, results averaged
-- Full reproduction script: [`run_benchmark.py`](run_benchmark.py)
+---
+
+## Changelog
+
+### 2.4.0
+
+**Performance** (fit time 4.5x faster than 2.3 at equal NMI; arXiv 102 s -> 24 s per run):
+
+- Iterative refinement works on the reduced embeddings (no `UMAP.transform()` per iteration)
+- Edge-level consensus clustering (O(edges)) instead of all-pairs co-occurrence
+- The corpus is tokenized once; the lexical TF-IDF view is derived from the keyword counts
+- Batched keyword extraction; `build_hierarchy()`/`divide()` no longer re-tokenize per topic; vectorized coherence and `topic_overlap_matrix()`
+
+**Quality**:
+
+- Coverage-weighted c-TF-IDF (+45% NPMI on the dev splits)
+- `n_topics="auto"` chooses the Leiden resolution by keyword coherence (with a guard against one-giant-topic partitions); new `resolution_` / `resolution_search_`
+- Default `resolution` 1.0 -> 0.3
+
+**Fixes**:
+
+- kNN graph on reduced embeddings uses Euclidean distance + self-tuning kernel (`reduced_metric`); FAISS L2 distances are square-rooted
+- BM25 keywords used the first *n* corpus documents instead of the topic's documents
+- Metadata reweights existing edges instead of adding O(n²) clique edges
+- `n_topics` / `divide()` resolution search counts only real topics and searches both directions
+- NPMI coherence uses the whole corpus as reference and counts bigram keywords
+- Token pattern drops numbers and underscores (`000`, `__`)
+- Post-fit operations use the unrefined embedding space of the centroids
 
 ---
 
