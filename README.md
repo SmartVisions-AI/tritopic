@@ -9,7 +9,7 @@ A state-of-the-art topic modeling library that fuses semantic embeddings, lexica
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
 [![Downloads](https://static.pepy.tech/badge/tritopic)](https://pepy.tech/project/tritopic)
 
-> **NMI 0.581 vs. 0.439** (BERTopic, same embeddings) | **2.2x keyword coherence** | **0% outliers** (BERTopic: 18%) | **7x more stable across seeds** | better NMI in **18 of 20** dataset/k settings
+> **NMI 0.582 vs. 0.439** (BERTopic, same embeddings) | **2.2x keyword coherence** | **0% outliers** (BERTopic: 18%) | **7x more stable across seeds** | better NMI in **18 of 20** dataset/k settings
 
 ---
 
@@ -30,6 +30,7 @@ A state-of-the-art topic modeling library that fuses semantic embeddings, lexica
 - [Topic Merging](#topic-merging)
 - [Keyword Extraction](#keyword-extraction)
 - [LLM-Powered Labels](#llm-powered-labels)
+- [LLM Judgements (OpenAI Decisions API)](#llm-judgements-openai-decisions-api)
 - [Visualizations](#visualizations)
 - [Evaluation](#evaluation)
 - [Advanced Usage](#advanced-usage)
@@ -755,6 +756,60 @@ If the LLM API call fails, the labeler falls back to a keyword-based label autom
 
 ---
 
+## LLM Judgements (OpenAI Decisions API)
+
+Optional add-on (`tritopic.integrations.decisions`) for typed LLM judgements via OpenAI's
+[Decisions API](https://developers.openai.com/api/docs/guides/decisions) (public beta, model `gpt-6-luna`,
+$0.10 per 1M input tokens). Nothing runs inside `fit()` -- clustering stays offline and reproducible.
+Needs `OPENAI_API_KEY`; no extra package.
+
+```python
+from tritopic.integrations.decisions import (
+    DecisionsClient, word_intrusion, rate_topics, assign_documents, suggest_merges, apply_merges,
+)
+client = DecisionsClient()                      # reads OPENAI_API_KEY
+
+# 1. Evaluate interpretability
+keywords = [t.keywords for t in model.topics_ if t.topic_id != -1]
+result = word_intrusion(keywords, client)      # automated word-intrusion test (Chang et al., 2009)
+print(result.accuracy, result.intruder_probability)
+ratings = rate_topics(keywords, client)         # 0-3: "one clear, nameable theme" = 3
+
+# 2. Assign documents to (labelled) topics; "other" -> -1
+labels, confidence = assign_documents(model, new_documents, client, min_confidence=0.5)
+model.reduce_outliers(strategy="decisions", decisions_client=client)
+
+# 3. Merge topics the LLM considers the same theme
+merges = suggest_merges(model, client, n_pairs=15, threshold=0.5)   # [(topic_a, topic_b, probability), ...]
+apply_merges(model, merges)
+```
+
+- **Word intrusion** mixes a topic's top-5 keywords with one top keyword of another topic and asks which word
+  does not belong; `accuracy` is the hit rate, `intruder_probability` the mean probability on the intruder.
+- **Assignment** offers each topic as its label (from `generate_labels`) plus keywords; with many topics the
+  candidates per document are the `n_candidates` nearest centroids.
+- **Merging** only examines the `n_pairs` most similar topic pairs (centroid cosine), so the cost stays small.
+- Requests run in parallel (`max_workers`), are retried on 429/5xx and cached in memory.
+- `benchmarks/llm_eval.py` compares TriTopic and BERTopic with these judgements (`--dry-run` estimates the cost).
+
+**Results** (`gpt-6-luna`, the four benchmark datasets, k = number of classes, 3 seeds; ~3,500 requests, about USD 0.15):
+
+| | TriTopic 2.4 | BERTopic (tuned) | BERTopic (default) |
+|---|---|---|---|
+| LLM rating, keywords (0-3) | **2.21** | 1.94 | 0.49 |
+| LLM rating, keywords + 2 example docs | **2.18** | 1.68 | 1.13 |
+| Word intrusion: probability on the intruder* | **0.70** | 0.51 | 0.67 |
+
+\*On the 6 of 12 runs where all three models produce enough distinct topics (BERTopic default yields 3-4
+near-identical stop-word topics on AG News and BBC).
+
+- **Assignment** of 200 held-out documents per run: Decisions API 0.657 vs. 0.648 for the built-in centroid
+  assignment; with the `"other"` option it abstains on ~32% but is ~74% accurate on the rest.
+- **Merge suggestions** separate same-class from different-class topic pairs better than centroid similarity
+  (AUC 0.63-0.75 vs. 0.61-0.65) but are conservative: on 2x over-segmented models they rarely change NMI.
+
+---
+
 ## Visualizations
 
 All visualizations return interactive Plotly figures.
@@ -1023,7 +1078,7 @@ The main model class. Follows the scikit-learn fit/transform pattern.
 | `fit_transform(documents, embeddings?, metadata?)` | Fit and return hard labels. |
 | `transform(documents)` | Assign topics to new documents. Returns labels array. |
 | `transform_proba(documents)` | Get soft probabilities for new documents. Returns `(n_docs, n_topics)` matrix. |
-| `reduce_outliers(strategy?, threshold?)` | Reassign outliers. Strategies: `"embeddings"`, `"neighbors"`. Returns `self`. |
+| `reduce_outliers(strategy?, threshold?, decisions_client?)` | Reassign outliers. Strategies: `"embeddings"`, `"neighbors"`, `"decisions"` (LLM). Returns `self`. |
 | `reduce_topics(n_topics)` | Merge down to `n_topics` non-outlier topics. Returns `self`. |
 | `merge_topics(topics_to_merge)` | Merge specific topic IDs into one. Returns `self`. |
 | `get_topic_info()` | DataFrame with Topic, Size, Keywords, Label, Coherence columns. |
@@ -1146,8 +1201,8 @@ Any model from the [sentence-transformers](https://www.sbert.net/) library works
 | **LLM labels** | Via representation model | Built-in Claude/GPT-4 support |
 | **Cross-lingual** | Manual model selection | Built-in `language` param with auto-model selection |
 | **Hierarchical topics** | Hierarchical topic modeling | Multi-resolution hierarchy + single-topic `divide()` |
-| **NMI (benchmark avg., fixed k)** | 0.439 | **0.581 (+32%)** |
-| **Coherence (strict NPMI, fixed k)** | 0.117 (tuned) | **0.263 (2.2x)** |
+| **NMI (benchmark avg., fixed k)** | 0.439 | **0.582 (+33%)** |
+| **Coherence (strict NPMI, fixed k)** | 0.117 (tuned) | **0.262 (2.2x)** |
 | **Seed stability (NMI spread)** | 0.105 | **0.014** |
 
 ---
@@ -1172,7 +1227,7 @@ automatic mode, 3 seeds each.
 
 | Model | NMI | ARI | NPMI (strict) | NPMI (2.3 benchmark) | Diversity | Outliers | Fit time (s) |
 |---|---|---|---|---|---|---|---|
-| **TriTopic 2.4** | 0.581 | 0.438 | 0.263 | 0.355 | 0.94 | 0.0% | 9.8 |
+| **TriTopic 2.4** | 0.582 | 0.440 | 0.262 | 0.355 | 0.94 | 0.0% | 9.5 |
 | TriTopic 2.3 | 0.581 | 0.436 | 0.212 | 0.343 | 0.92 | 0.0% | 44.3 |
 | BERTopic (default) | 0.439 | 0.285 | 0.048 | 0.212 | 0.44 | 18.4% | 9.9 |
 | BERTopic (tuned) | 0.439 | 0.285 | 0.117 | 0.294 | 0.89 | 18.4% | 16.6 |
@@ -1191,15 +1246,15 @@ automatic mode, 3 seeds each.
 | Dataset | **TriTopic 2.4** | TriTopic 2.3 | BERTopic (default) | BERTopic (tuned) |
 |---|---|---|---|---|
 | 20 Newsgroups | 0.529 | **0.530** | 0.264 | 0.264 |
-| AG News | 0.525 | **0.527** | 0.377 | 0.377 |
-| arXiv | **0.566** | 0.565 | 0.450 | 0.450 |
+| AG News | 0.526 | **0.527** | 0.377 | 0.377 |
+| arXiv | **0.568** | 0.565 | 0.450 | 0.450 |
 | BBC News | **0.702** | 0.701 | 0.663 | 0.663 |
 
 #### Seed stability (fixed k): NMI spread across 3 seeds
 
 | Model | Mean spread | Worst spread |
 |---|---|---|
-| **TriTopic 2.4** | 0.014 | 0.046 |
+| **TriTopic 2.4** | 0.012 | 0.038 |
 | TriTopic 2.3 | 0.014 | 0.048 |
 | BERTopic (default) | 0.105 | 0.318 |
 | BERTopic (tuned) | 0.105 | 0.318 |
@@ -1236,8 +1291,14 @@ then `python benchmarks/summarize.py results.csv` and `python benchmarks/results
 - `n_topics="auto"` chooses the Leiden resolution by keyword coherence (with a guard against one-giant-topic partitions); new `resolution_` / `resolution_search_`
 - Default `resolution` 1.0 -> 0.3
 
+**New**:
+
+- `tritopic.integrations.decisions`: LLM word-intrusion evaluation, topic ratings, document assignment, `reduce_outliers(strategy="decisions")` and merge suggestions via the OpenAI Decisions API (optional)
+
 **Fixes**:
 
+- `reduce_topics()` no longer applies a size penalty by default (it merged small topics into large unrelated ones; 2k -> k: NMI 0.542 -> 0.591, ARI 0.358 -> 0.452); available as `size_penalty=0.3`
+- `n_topics=k` resolution search widens its range until *k* is reachable (fixed range silently missed targets)
 - kNN graph on reduced embeddings uses Euclidean distance + self-tuning kernel (`reduced_metric`); FAISS L2 distances are square-rooted
 - BM25 keywords used the first *n* corpus documents instead of the topic's documents
 - Metadata reweights existing edges instead of adding O(n²) clique edges

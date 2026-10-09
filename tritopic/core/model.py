@@ -1275,8 +1275,9 @@ class TriTopic:
 
     def reduce_outliers(
         self,
-        strategy: Literal["embeddings", "neighbors"] = "embeddings",
+        strategy: Literal["embeddings", "neighbors", "decisions"] = "embeddings",
         threshold: float | None = None,
+        decisions_client: Any | None = None,
     ) -> "TriTopic":
         """
         Reassign outlier documents to the nearest topic.
@@ -1288,9 +1289,15 @@ class TriTopic:
             (if similarity > threshold).
             "neighbors" — assign each outlier by majority vote of its k nearest
             non-outlier neighbors in embedding space.
+            "decisions" — ask an LLM (OpenAI Decisions API) which labelled
+            topic each outlier belongs to; "other" keeps it an outlier.
+            Requires *decisions_client*.
         threshold : float, optional
-            Minimum cosine similarity for assignment (embeddings strategy only).
+            Minimum cosine similarity for assignment (embeddings strategy), or
+            minimum LLM confidence (decisions strategy, default 0.5).
             Defaults to ``self.config.outlier_threshold``.
+        decisions_client : tritopic.integrations.decisions.DecisionsClient
+            Client for ``strategy="decisions"``.
 
         Returns
         -------
@@ -1349,8 +1356,23 @@ class TriTopic:
                 # Majority vote
                 values, counts = np.unique(neighbor_labels, return_counts=True)
                 self.labels_[global_idx] = values[np.argmax(counts)]
+        elif strategy == "decisions":
+            from tritopic.integrations.decisions import assign_documents
+
+            if decisions_client is None:
+                raise ValueError("strategy='decisions' needs decisions_client=DecisionsClient(...).")
+            base_emb = self.original_embeddings_ if self.original_embeddings_ is not None else self.embeddings_
+            new_labels, _ = assign_documents(
+                self, [self.documents_[i] for i in outlier_indices], decisions_client,
+                embeddings=base_emb[outlier_indices] if base_emb is not None else None,
+                min_confidence=0.5 if threshold is None else threshold,
+                allow_other=True,  # abstaining keeps a document an outlier
+            )
+            self.labels_[outlier_indices] = new_labels
         else:
-            raise ValueError(f"Unknown strategy: {strategy!r}. Use 'embeddings' or 'neighbors'.")
+            raise ValueError(
+                f"Unknown strategy: {strategy!r}. Use 'embeddings', 'neighbors' or 'decisions'."
+            )
 
         # Refresh downstream state
         self._extract_topic_info(self.documents_)
@@ -1363,7 +1385,7 @@ class TriTopic:
 
         return self
 
-    def reduce_topics(self, n_topics: int) -> "TriTopic":
+    def reduce_topics(self, n_topics: int, size_penalty: float = 0.0) -> "TriTopic":
         """
         Iteratively merge the two most similar topics until *n_topics* remain.
 
@@ -1371,6 +1393,10 @@ class TriTopic:
         ----------
         n_topics : int
             Target number of non-outlier topics.
+        size_penalty : float
+            Exponent of a ``(min_size / max_size)`` factor on the centroid
+            similarity, favouring merges of similarly sized topics.  0
+            (default) merges purely by similarity; 2.2-2.4.0 used 0.3.
 
         Returns
         -------
@@ -1406,13 +1432,14 @@ class TriTopic:
             ])
             sim = cos_sim(centroids)
 
-            # Size-aware merge scoring: prefer merging smaller topics.
-            # Penalty = (min_size / max_size) ** 0.3 (mild): small-small -> 1,
-            # small-large -> small.
-            size_factor = (
-                np.minimum.outer(sizes, sizes) / np.maximum.outer(sizes, sizes)
-            ) ** 0.3
-            sim = sim * size_factor
+            # Optional size-aware scoring: (min_size / max_size) ** size_penalty.
+            # Off by default -- it pushed small topics into large unrelated
+            # ones (reduce 2k -> k: NMI 0.542 -> 0.591, ARI 0.358 -> 0.452
+            # without it on the benchmark splits, same direction on dev).
+            if size_penalty:
+                sim = sim * (
+                    np.minimum.outer(sizes, sizes) / np.maximum.outer(sizes, sizes)
+                ) ** size_penalty
             np.fill_diagonal(sim, -np.inf)
 
             # Find best pair to merge

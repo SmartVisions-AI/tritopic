@@ -22,3 +22,7 @@ paper/results/
 # Windows device-name artifacts
 nul
 NUL
+
+# Secrets
+.env
+.env.*

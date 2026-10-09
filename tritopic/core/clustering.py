@@ -319,6 +319,27 @@ class ConsensusLeiden:
             # Bisect in log-space: the topic count scales roughly with
             # log(resolution), so a linear midpoint wastes most probes.
             lo, hi = resolution_range
+            # Widen the bracket until it contains the target (a fixed range
+            # silently missed targets on very clean or very noisy graphs).
+            # Only widen while the count still moves towards the target: with
+            # min_cluster_size the count drops again at very high resolutions
+            # (clusters fragment below the minimum size).
+            n_hi = _n_clusters_at(hi)
+            for _ in range(12):
+                if n_hi >= target_n_topics:
+                    break
+                n_next = _n_clusters_at(hi * 4)
+                if n_next <= n_hi:
+                    break
+                lo, hi, n_hi = hi, hi * 4, n_next
+            n_lo = _n_clusters_at(lo)
+            for _ in range(12):
+                if n_lo <= target_n_topics:
+                    break
+                n_next = _n_clusters_at(lo / 4)
+                if n_next >= n_lo:
+                    break
+                lo, hi, n_lo = lo / 4, lo, n_next
             best_res, best_diff = lo, abs(_n_clusters_at(lo) - target_n_topics)
 
             for _ in range(n_steps):
