@@ -1,930 +1,346 @@
-# TriTopic v2.3.0 — Complete Technical Documentation
+# TriTopic 2.4 — Technical Documentation
 
-## Tri-Modal Graph-Based Topic Modeling with Iterative Refinement
+How TriTopic works, why it is built this way, and how to use every part of it. For a quick start see the
+[README](../README.md); for release notes the [CHANGELOG](../CHANGELOG.md).
 
-**Version 2.3.0** | February 2026
+## Contents
 
----
-
-## Table of Contents
-
-1. [Design Philosophy](#1-design-philosophy)
-2. [The Full Pipeline — Step by Step](#2-the-full-pipeline--step-by-step)
-   - 2.1 [Step 1: Document Embedding](#21-step-1-document-embedding)
-   - 2.2 [Step 1.5: Dimensionality Reduction](#22-step-15-dimensionality-reduction)
-   - 2.3 [Step 2: Lexical View (TF-IDF)](#23-step-2-lexical-view-tf-idf)
-   - 2.4 [Step 3: Metadata View (optional)](#24-step-3-metadata-view-optional)
-   - 2.5 [Step 4: Multi-View Graph Fusion](#25-step-4-multi-view-graph-fusion)
-   - 2.6 [Step 5: Consensus Leiden Clustering](#26-step-5-consensus-leiden-clustering)
-   - 2.7 [Step 6: Iterative Refinement](#27-step-6-iterative-refinement)
-   - 2.8 [Step 7: Keyword Extraction & Topic Info](#28-step-7-keyword-extraction--topic-info)
-   - 2.9 [Step 8: Centroid Computation & Probabilities](#29-step-8-centroid-computation--probabilities)
-   - 2.10 [Step 9: Target Topic Count (Bidirectional Resolution Search)](#210-step-9-target-topic-count-bidirectional-resolution-search)
-3. [Graph Construction — In Detail](#3-graph-construction--in-detail)
-   - 3.1 [kNN Graph](#31-knn-graph)
-   - 3.2 [Mutual kNN Graph](#32-mutual-knn-graph)
-   - 3.3 [Shared Nearest Neighbors (SNN)](#33-shared-nearest-neighbors-snn)
-   - 3.4 [Hybrid Graph (Default)](#34-hybrid-graph-default)
-   - 3.5 [Lexical Graph](#35-lexical-graph)
-   - 3.6 [Metadata Graph](#36-metadata-graph)
-   - 3.7 [Multi-View Fusion with Consensus Bonus](#37-multi-view-fusion-with-consensus-bonus)
-4. [Consensus Clustering — In Detail](#4-consensus-clustering--in-detail)
-   - 4.1 [Multiple Leiden Runs](#41-multiple-leiden-runs)
-   - 4.2 [Sparse Co-Occurrence Matrix](#42-sparse-co-occurrence-matrix)
-   - 4.3 [Hierarchical Consensus Cut](#43-hierarchical-consensus-cut)
-   - 4.4 [Small-Cluster Removal](#44-small-cluster-removal)
-   - 4.5 [Stability Score](#45-stability-score)
-5. [Iterative Refinement — In Detail](#5-iterative-refinement--in-detail)
-   - 5.1 [Distance-Aware Centroid Pulling](#51-distance-aware-centroid-pulling)
-   - 5.2 [Decaying Blend Factor](#52-decaying-blend-factor)
-   - 5.3 [Convergence Detection](#53-convergence-detection)
-6. [Bidirectional Resolution Search](#6-bidirectional-resolution-search)
-7. [Post-Fit Operations](#7-post-fit-operations)
-   - 7.1 [Outlier Reduction](#71-outlier-reduction)
-   - 7.2 [Topic Merging (Size-Aware)](#72-topic-merging-size-aware)
-   - 7.3 [Manual Topic Merging](#73-manual-topic-merging)
-8. [Keyword Extraction Methods](#8-keyword-extraction-methods)
-   - 8.1 [c-TF-IDF (Default)](#81-c-tf-idf-default)
-   - 8.2 [BM25](#82-bm25)
-   - 8.3 [KeyBERT](#83-keybert)
-9. [Prediction on New Documents](#9-prediction-on-new-documents)
-10. [Soft Topic Probabilities](#10-soft-topic-probabilities)
-11. [Cross-Lingual Support](#11-cross-lingual-support)
-12. [Hierarchical Topic Organization](#12-hierarchical-topic-organization)
-13. [Per-Document Topic Analysis](#13-per-document-topic-analysis)
-14. [Evaluation Metrics](#14-evaluation-metrics)
-15. [Complete Configuration Reference](#15-complete-configuration-reference)
-16. [Key Design Decisions & Rationale](#16-key-design-decisions--rationale)
-17. [Benchmark Results](#17-benchmark-results)
+1. [Design principles](#1-design-principles)
+2. [The pipeline step by step](#2-the-pipeline-step-by-step)
+3. [Graph construction](#3-graph-construction)
+4. [Consensus clustering](#4-consensus-clustering)
+5. [Choosing the resolution](#5-choosing-the-resolution)
+6. [Iterative refinement](#6-iterative-refinement)
+7. [Keywords](#7-keywords)
+8. [Centroids, probabilities and new documents](#8-centroids-probabilities-and-new-documents)
+9. [Post-fit operations](#9-post-fit-operations)
+10. [Hierarchies and per-document analysis](#10-hierarchies-and-per-document-analysis)
+11. [Languages](#11-languages)
+12. [LLM topic interpretation](#12-llm-topic-interpretation)
+13. [LLM judgements via the Decisions API](#13-llm-judgements-via-the-decisions-api)
+14. [Evaluation metrics](#14-evaluation-metrics)
+15. [Configuration reference](#15-configuration-reference)
+16. [Design decisions and the evidence behind them](#16-design-decisions-and-the-evidence-behind-them)
+17. [Performance](#17-performance)
 
 ---
 
-## 1. Design Philosophy
+## 1. Design principles
 
-TriTopic is built on three convictions:
+1. **No single view is enough.** Embeddings capture meaning but blur specific wording; TF-IDF captures
+   wording but misses synonyms; metadata captures structure but not content. TriTopic fuses them in one
+   graph. Removing the lexical view costs about 0.05 NMI on the development benchmarks.
+2. **Stochastic clustering needs stabilising.** One Leiden run depends on its seed. TriTopic runs it ten
+   times and builds a consensus; across seeds the NMI spread is 0.014 (BERTopic: 0.105).
+3. **Every document gets a topic.** Graph clustering assigns every document; only clusters smaller than
+   `min_cluster_size` become outliers, which is rare.
+4. **Decide on development data, report on held-out data.** Every default in 2.4 was chosen on separate
+   development splits; the benchmark numbers come from untouched evaluation splits.
 
-1. **No single view is sufficient.** Embeddings capture semantics but blur lexical details. TF-IDF captures term specificity but misses synonyms. Metadata captures structure but not content. TriTopic fuses all three into a unified graph where the strengths of one view compensate for the weaknesses of another.
+## 2. The pipeline step by step
 
-2. **Stochastic algorithms need stabilization.** A single Leiden run depends on random initialization. Running it once and accepting the result is like flipping a coin and calling it science. TriTopic runs Leiden multiple times and builds a consensus, producing near-deterministic partitions (cross-seed NMI standard deviation: 0.007).
+`model.fit(documents, embeddings=None, metadata=None)`:
 
-3. **Every document deserves a topic.** Density-based methods like HDBSCAN discard "difficult" documents as outliers (up to 29% of the corpus). TriTopic assigns every document to its most plausible topic via graph-based clustering, achieving 100% coverage without sacrificing quality.
+| Step | What happens | Stored as |
+|---|---|---|
+| 1 | Encode documents with a sentence-transformer (skipped if `embeddings` are passed) | `original_embeddings_` |
+| 2 | Reduce to 10 dimensions with UMAP (`min_dist=0`, cosine input) | `reduced_embeddings_`, `_dim_reducer` |
+| 3 | Tokenize once; derive the TF-IDF matrix from the counts | `lexical_matrix_` |
+| 4 | Encode metadata (optional) | — |
+| 5 | Build the fused graph; with `n_topics="auto"` scan resolutions | `graph_`, `resolution_`, `resolution_search_` |
+| 6 | Consensus Leiden + iterative refinement | `labels_` |
+| 7 | Keywords and representative documents per topic | `topics_` |
+| 8 | Centroids and soft probabilities | `topic_embeddings_`, `probabilities_` |
+| 9 | With `n_topics=k`: resolution search for *k* topics, merge down if needed | — |
 
----
+Full-dimensional, unrefined embeddings are used for centroids, probabilities, `transform()`, outlier
+reduction and merging, so new documents are always compared in the same space.
 
-## 2. The Full Pipeline — Step by Step
+## 3. Graph construction
 
-When `model.fit(documents)` is called, the following happens in order:
+**Semantic graph** (`graph_type="hybrid"`, default). kNN on the reduced embeddings with Euclidean distance
+(`reduced_metric`). UMAP output is a Euclidean layout; cosine angles around its arbitrary origin would join
+clusters that happen to lie on the same ray. Similarities use a self-tuning Gaussian kernel,
+`exp(-d² / (σᵢ σⱼ))` with σ the distance to the k-th neighbour, so dense and sparse regions get comparable
+weights. Without dimensionality reduction the metric is cosine on the full embeddings.
 
-### 2.1 Step 1: Document Embedding
+- *Mutual kNN*: an edge only if both points are among each other's neighbours (removes noise bridges).
+- *SNN*: weight = shared neighbours / k (structural similarity), computed as a sparse product `A·Aᵀ`.
+- *Hybrid*: `(1 - snn_weight) · mutual + snn_weight · SNN`, each max-normalised.
 
-**What:** Each document is encoded into a dense vector using a Sentence-Transformer model.
+**Lexical graph.** Mutual kNN with cosine similarity on TF-IDF (top 10,000 terms, sublinear TF, uni- and
+bigrams, stop words of `language`). It is built once per fit and cached.
 
-**How:**
-```
-documents → SentenceTransformer("all-MiniLM-L6-v2") → embeddings (N × 384)
-```
-
-**Default model:** `all-MiniLM-L6-v2` (384 dimensions, fast, good quality).
-
-**Details:**
-- Encoding is batched (`batch_size=32`) to control memory usage.
-- All embeddings are L2-normalized, so cosine similarity = dot product.
-- The embedding engine is lazy-loaded: the model is not downloaded until the first `encode()` call.
-- If pre-computed embeddings are passed via `fit(documents, embeddings=my_embeddings)`, this step is skipped entirely.
-
-**Rationale:** Sentence-Transformers produce semantically meaningful vectors where "automobile" and "car" are close, even though they share no characters. This is the foundation of TriTopic's semantic understanding.
-
-### 2.2 Step 1.5: Dimensionality Reduction
-
-**What:** High-dimensional embeddings (384-768d) are projected to ~10 dimensions before graph construction.
-
-**How:**
-```
-embeddings (N × 384) → UMAP(n_components=10, n_neighbors=15, min_dist=0.0, metric="cosine") → reduced_embeddings (N × 10)
-```
-
-**Details:**
-- `min_dist=0.0` is deliberately set for clustering (not visualization).
-- The fitted UMAP reducer is stored so new documents can be projected during `transform()`.
-- Both the full and reduced embeddings are kept. Reduced are used only for graph construction; full are used for centroids, keywords, and probabilities.
-- Alternative: PaCMAP can be used instead of UMAP (`dim_reduction_method="pacmap"`).
-
-**Rationale:** kNN in 384 dimensions suffers from the curse of dimensionality: distances concentrate and all points appear equidistant. Reducing to 10d dramatically improves neighbor quality. The kNN graph built on 10d embeddings is cleaner and produces better clusters. This is not lossy compression — the full embeddings are preserved for all downstream operations.
-
-### 2.3 Step 2: Lexical View (TF-IDF)
-
-**What:** A sparse term-frequency matrix capturing exact word usage patterns.
-
-**How:**
-```
-documents → TfidfVectorizer(
-    max_features=10000,
-    stop_words="english",
-    ngram_range=(1, 2),     # unigrams and bigrams
-    min_df=2,               # ignore words appearing in < 2 docs
-    max_df=0.95,            # ignore words appearing in > 95% of docs
-    sublinear_tf=True       # log(1 + tf) instead of raw tf
-) → lexical_matrix (N × V, sparse)
-```
-
-**Details:**
-- `sublinear_tf=True` applies `log(1 + tf)` dampening, preventing long documents from dominating through sheer word count.
-- The matrix is stored as `self.lexical_matrix_` and reused for keyword extraction.
-- The vectorizer vocabulary is shared between graph construction and keyword extraction for consistency.
-
-**Rationale:** Embeddings blur lexical distinctions. "Breakfast buffet" and "dinner service" both map to similar "food/dining" embeddings. TF-IDF preserves the distinction because the actual tokens differ. By building a separate lexical similarity graph and fusing it with the semantic graph, TriTopic gets both semantic depth and lexical precision.
-
-### 2.4 Step 3: Metadata View (optional)
-
-**What:** A similarity graph based on structured document attributes (source, category, date, etc.).
-
-**How (if enabled and metadata provided):**
-
-For each metadata column:
-- **Categorical columns:** Documents sharing the same category value get an edge. Implemented as sparse indicator matrix multiplication: `M @ M.T` where M is the one-hot encoding.
-- **Numerical columns:** Normalized to [0,1], then kNN with threshold: only pairs with similarity > 0.8 get an edge.
-
-The per-column adjacency matrices are summed and normalized to [0,1].
-
-**Rationale:** In many practical applications, documents with the same author, from the same time period, or tagged with the same category are more likely to share a topic. This view adds structural priors that pure content analysis misses.
-
-### 2.5 Step 4: Multi-View Graph Fusion
-
-**What:** The semantic, lexical, and metadata similarities are combined into a single igraph Graph.
-
-**How:**
-
-1. Build semantic graph from reduced embeddings using the configured graph type (default: hybrid MkNN + SNN).
-2. Build lexical graph from TF-IDF matrix using mutual kNN.
-3. Normalize both to [0, 1] by dividing by their respective maximum weight.
-4. Determine active views (skip views that are disabled or have no data).
-5. Re-normalize weights so active views sum to 1.0.
-6. Combine: `combined = w_sem * semantic + w_lex * lexical + w_meta * metadata`
-7. **Consensus bonus:** Add `+0.1` to edges that appear in *both* semantic and lexical graphs. This rewards structurally agreed-upon connections.
-8. Convert to igraph.Graph with edge weights.
-
-**Default weights:** semantic=0.5, lexical=0.3, metadata=0.2. If metadata is not used, weights re-normalize to semantic=0.625, lexical=0.375.
-
-**Rationale:** Each view captures different aspects of document similarity. The weighted fusion ensures that two documents are strongly connected only if multiple views agree. The consensus bonus further rewards edges supported by both embedding-based and term-based evidence.
-
-See [Section 3](#3-graph-construction--in-detail) for detailed graph construction algorithms.
-
-### 2.6 Step 5: Consensus Leiden Clustering
-
-**What:** The fused graph is partitioned into communities using the Leiden algorithm, run multiple times for stability.
-
-**How:**
-
-1. Run Leiden `n_consensus_runs` times (default: 10) with different random seeds.
-2. Build a co-occurrence matrix: `C[i,j]` = fraction of runs where documents i and j were in the same cluster.
-3. Apply hierarchical clustering (average linkage) on `1 - C` to produce a consensus partition.
-4. Select the cut that maximizes the average ARI with all individual Leiden runs.
-5. Mark clusters smaller than `min_cluster_size` (default: 5) as outliers (-1).
-
-**Rationale:** A single Leiden run is unstable. Two runs with different seeds can produce substantially different partitions. The consensus approach filters out random noise: if two documents are consistently co-clustered across 10 runs, their grouping is structural, not accidental.
-
-See [Section 4](#4-consensus-clustering--in-detail) for the full algorithm.
-
-### 2.7 Step 6: Iterative Refinement
-
-**What:** Embeddings are softly blended toward their topic centroid, then the graph and clustering are re-run. This tightens cluster boundaries.
-
-**How (if `use_iterative_refinement=True`, default):**
-
-```
-For iteration = 1 to max_iterations (default: 5):
-    1. Compute topic centroids from current embeddings
-    2. For each document:
-         cos_sim = cosine_similarity(document, its_centroid)
-         per_doc_blend = blend_factor * sqrt(cos_sim)
-         refined = (1 - per_doc_blend) * original + per_doc_blend * centroid
-    3. L2-normalize refined embeddings
-    4. Re-reduce dimensions (UMAP transform)
-    5. Rebuild graph and re-cluster
-    6. Check convergence: ARI(current, previous) > 0.95 → stop
-```
-
-**Blend factor decay:** Starts at 0.3 (aggressive), decreases to ~0.1 (conservative) across iterations:
-```
-blend = 0.3 - 0.2 * (iteration / (max_iterations - 1))
-```
-
-**Rationale:** Initial clustering creates reasonable but imperfect boundaries. By pulling documents toward their centroids and re-clustering, the boundaries sharpen. The distance-aware blend is crucial: core documents (high cosine similarity to centroid) receive the full pull, while borderline documents receive a weaker pull to avoid forcing ambiguous documents into the wrong cluster.
-
-See [Section 5](#5-iterative-refinement--in-detail) for the full algorithm.
-
-### 2.8 Step 7: Keyword Extraction & Topic Info
-
-**What:** For each discovered topic, extract representative keywords and find representative documents.
-
-**How:**
-
-1. For each non-outlier topic:
-   - Collect all documents in the topic.
-   - Extract keywords using the configured method (default: c-TF-IDF).
-   - Find representative documents: documents with highest cosine similarity to the topic centroid.
-   - Create a `TopicInfo` object storing: topic_id, size, keywords, keyword_scores, representative_docs.
-
-2. Topics are sorted by size (descending), with the outlier topic (-1) listed last.
-
-**Rationale:** Keywords define the human-readable interface of each topic. Representative documents provide concrete examples. Both are essential for interpretability.
-
-See [Section 8](#8-keyword-extraction-methods) for keyword extraction details.
-
-### 2.9 Step 8: Centroid Computation & Probabilities
-
-**What:** Compute topic centroid embeddings and soft probability distributions.
-
-**Centroids:**
-```
-For each non-outlier topic:
-    centroid = mean(original_embeddings[topic_members])
-```
-
-**Key detail:** Centroids are computed from **original (unrefined) embeddings**, not the iteratively refined ones. This ensures that `transform()` on new documents operates in the same embedding space.
-
-**Probabilities:**
-```
-similarities = cosine_similarity(original_embeddings, topic_centroids)
-probabilities = softmax(similarities * temperature, axis=1)
-```
-
-Default temperature: 5.0 (fairly sharp peaks, confident assignments).
-
-**Rationale:** Hard labels (argmax) lose information about borderline documents. Soft probabilities reveal documents that belong partially to multiple topics. The temperature parameter controls how "peaked" the distribution is: higher temperature = sharper peaks = more confident assignments.
-
-### 2.10 Step 9: Target Topic Count (Bidirectional Resolution Search)
-
-**What:** If the user specifies `n_topics=K`, TriTopic searches for the Leiden resolution that naturally produces K clusters.
-
-**How:**
-
-1. Compare current topic count to target.
-2. **If target > current:** Search higher resolutions in range `[resolution, resolution * 10]`.
-3. **If target < current:** Search lower resolutions in range `[0.001, resolution]`.
-4. Use binary search (20 steps) to find the resolution closest to the target.
-5. Re-cluster at the best resolution found.
-6. If the result still overshoots: fall back to `reduce_topics()` for final adjustment.
-
-**Rationale:** The naive approach — cluster with default resolution, then merge topics down — produces poor results because greedy merging destroys natural cluster structure. For example, BBC News has 5 natural categories. Clustering at high resolution produces 12 topics, and merging down to 5 gives NMI ~0.04. Clustering directly at a lower resolution produces 5 natural clusters with NMI ~0.70. The bidirectional search finds the resolution that produces the right number of clusters organically.
-
-See [Section 6](#6-bidirectional-resolution-search) for the full algorithm.
-
----
-
-## 3. Graph Construction — In Detail
-
-### 3.1 kNN Graph
-
-The simplest graph type. Each document connects to its k nearest neighbors.
-
-```
-For each document i:
-    Find k nearest neighbors by cosine distance
-    Add directed edge i → j with weight = 1 - distance(i, j)
-```
-
-**Problem:** Asymmetric. Document A might consider B a neighbor, but B might not consider A a neighbor. These one-way connections can bridge unrelated clusters.
-
-### 3.2 Mutual kNN Graph
-
-Only keeps edges where both endpoints consider each other neighbors.
-
-```
-(i, j) is an edge  ⟺  j ∈ kNN(i)  AND  i ∈ kNN(j)
-```
-
-**Implementation (vectorized):**
-1. Build directed kNN adjacency as sparse matrix.
-2. Compute element-wise minimum with transpose: `mutual = knn.minimum(knn.T)`.
-3. Average forward and reverse weights: `weight = (knn[i,j] + knn[j,i]) / 2`.
-
-**Effect:** Removes 40-60% of edges compared to kNN. The surviving edges represent strong, bidirectional similarity. This eliminates noise bridges between unrelated clusters.
-
-### 3.3 Shared Nearest Neighbors (SNN)
-
-Edge weight = number of shared neighbors between two documents, normalized by k.
-
-```
-w(i, j) = |kNN(i) ∩ kNN(j)| / k
-```
-
-**Implementation:**
-1. For each document, store its kNN set.
-2. For each pair of mutual neighbors, compute set intersection size.
-3. Normalize by k.
-
-**Insight:** Two documents in the same dense region share many neighbors. Two documents in different regions share few. SNN captures topological density, not raw distance.
-
-### 3.4 Hybrid Graph (Default)
-
-Weighted combination of mutual kNN and SNN.
-
-```
-hybrid = (1 - snn_weight) * mutual_knn + snn_weight * snn
-```
-
-Default `snn_weight=0.5` gives equal contribution from both.
-
-**Optimization:** The kNN computation is shared — computed once and reused by both mutual kNN and SNN construction. This avoids redundant work.
-
-**Rationale:** Mutual kNN provides direct similarity signals (high-weight = similar content). SNN provides structural signals (high-weight = same neighborhood). The combination captures both aspects.
-
-### 3.5 Lexical Graph
-
-Built from TF-IDF vectors using mutual kNN with cosine distance.
-
-```
-tfidf_matrix (N × V) → NearestNeighbors(metric="cosine") → mutual kNN graph
-```
-
-Documents that share the same rare, topic-specific terms get strong connections. Documents that only share common words get weak connections (filtered out by mutual kNN).
-
-### 3.6 Metadata Graph
-
-Built from structured attributes.
-
-**Categorical columns:** `M @ M.T` where M is the one-hot encoding. Creates edges between all documents sharing a category value.
-
-**Numerical columns:** kNN with similarity threshold > 0.8. Only documents with very similar numerical values get connected.
-
-### 3.7 Multi-View Fusion with Consensus Bonus
-
-The three graphs are combined with configurable weights:
-
-```
-combined = w_sem * semantic_adj + w_lex * lexical_adj + w_meta * metadata_adj
-```
-
-**Consensus Bonus:** Edges that exist in both the semantic and lexical graph receive an additional `+0.1` weight boost:
-
-```
-consensus_edges = semantic_adj.multiply(lexical_adj)  # element-wise: non-zero where both exist
-combined += 0.1 * (consensus_edges > 0)
-```
-
-**Rationale:** If both the embedding similarity and the word-overlap similarity agree that two documents are related, that connection is very likely real. The bonus amplifies these high-confidence edges, improving cluster purity.
-
-**Deduplication:** The combined sparse matrix may have duplicate edges (from overlapping views). These are resolved by keeping the maximum weight for each (i, j) pair.
-
----
-
-## 4. Consensus Clustering — In Detail
-
-### 4.1 Multiple Leiden Runs
-
-```python
-for run in range(n_consensus_runs):  # default: 10
-    seed = random_state + run
-    partition = leidenalg.find_partition(
-        graph,
-        la.RBConfigurationVertexPartition,  # resolution-based modularity
-        weights="weight",
-        resolution_parameter=resolution,
-        seed=seed,
-    )
-    labels = np.array(partition.membership)
-    all_partitions.append(labels)
-```
-
-Each run uses a different seed, producing a different (but related) partition. The RBConfiguration variant uses the resolution parameter to control granularity.
-
-### 4.2 Sparse Co-Occurrence Matrix
-
-For each partition, we build a sparse indicator matrix M (N × K) where M[i, c] = 1 if document i is in cluster c.
-
-```
-co_occur = sum over runs of (M @ M.T)
-```
-
-`M @ M.T` is a sparse N×N matrix where entry (i, j) = 1 if documents i and j are in the same cluster in that run. Summing across all runs and dividing by n_runs gives the co-occurrence probability.
-
-**Rationale for sparse computation:** Directly building a dense N×N matrix is O(N²) in memory. The sparse indicator approach leverages the fact that cluster memberships are sparse (each document is in exactly one cluster), making the computation efficient for large corpora.
-
-### 4.3 Hierarchical Consensus Cut
-
-```
-distance = 1.0 - co_occur_dense
-distance = clip((distance + distance.T) / 2, 0, 1)  # ensure symmetry
-condensed = squareform(distance)
-Z = linkage(condensed, method="average")
-```
-
-The hierarchical tree is cut at the level that best matches the original partitions:
+**Fusion.** `w_sem · semantic + w_lex · lexical + 0.1 · min(semantic, lexical)`; weights are renormalised
+over the active views. The last term rewards edges both views agree on.
 
-```
-median_k = median(n_clusters across runs)
-for n_clusters in range(median_k - 2, median_k + 3):
-    labels = fcluster(Z, n_clusters, criterion="maxclust")
-    score = mean([ARI(labels, p) for p in all_partitions])
-    keep best
-```
-
-**Fallback:** If hierarchical consensus fails, the partition with the highest average ARI to all other partitions is selected directly.
-
-### 4.4 Small-Cluster Removal
-
-Clusters with fewer than `min_cluster_size` (default: 5) documents are dissolved. Their members are marked as outliers (-1). Remaining clusters are relabeled to consecutive integers starting at 0.
-
-**Rationale:** Very small clusters are typically noise or edge cases. Marking them as outliers (rather than forcing them into a topic) preserves the integrity of the remaining clusters. They can be reassigned later via `reduce_outliers()`.
-
-### 4.5 Stability Score
-
-```
-stability = mean([ARI(partition_i, partition_j) for all pairs i < j])
-```
-
-This quantifies how consistent the Leiden runs are. Typical values:
-- 0.90+ : Very stable (strong cluster structure)
-- 0.70-0.90 : Moderately stable
-- < 0.70 : Unstable (consider adjusting resolution or data preprocessing)
-
----
-
-## 5. Iterative Refinement — In Detail
-
-### 5.1 Distance-Aware Centroid Pulling
-
-For each document in each topic:
-
-```python
-centroid = mean(embeddings[topic_members])
-cos_sim = dot(normalized_embedding, normalized_centroid)
-per_doc_blend = blend_factor * sqrt(max(0, cos_sim))
-refined = (1 - per_doc_blend) * original + per_doc_blend * centroid
-```
-
-The `sqrt(cos_sim)` scaling is the key innovation:
-- **Core documents** (cos_sim ≈ 0.9): blend ≈ 0.95 × blend_factor → strong pull toward centroid.
-- **Borderline documents** (cos_sim ≈ 0.4): blend ≈ 0.63 × blend_factor → moderate pull.
-- **Misplaced documents** (cos_sim ≈ 0.1): blend ≈ 0.32 × blend_factor → weak pull, protecting against reinforcing errors.
-
-After blending, all embeddings are L2-normalized to maintain unit length.
-
-### 5.2 Decaying Blend Factor
-
-```
-blend = 0.3 - 0.2 * (iteration / (max_iterations - 1))
-```
-
-| Iteration | blend_factor | Effect |
-|-----------|-------------|--------|
-| 0 | 0.30 | Aggressive repositioning — move documents decisively |
-| 1 | 0.25 | Still substantial movement |
-| 2 | 0.20 | Moderate adjustment |
-| 3 | 0.15 | Fine-tuning |
-| 4 | 0.10 | Minimal adjustment — only subtle corrections |
-
-**Rationale:** Early iterations need aggressive repositioning to fix initial misassignments. Later iterations should only make subtle corrections. Without decay, the algorithm can oscillate between partitions.
-
-### 5.3 Convergence Detection
-
-After each iteration, compute ARI between current and previous partition:
-
-```python
-ari = adjusted_rand_score(current_labels, previous_labels)
-if ari >= convergence_threshold:  # default: 0.95
-    break  # converged
-```
-
-Typical convergence: iteration 2-3 (ARI > 0.95 by the third pass).
-
-**What the iteration history stores:**
-
-```python
-_iteration_history = [
-    {"iteration": 1, "ari": 0.82, "n_topics": 14},
-    {"iteration": 2, "ari": 0.94, "n_topics": 13},
-    {"iteration": 3, "ari": 0.97, "n_topics": 13},  # converged
-]
-```
-
----
-
-## 6. Bidirectional Resolution Search
-
-When `n_topics` is set to an integer (e.g., `n_topics=5`):
-
-```python
-if target > current_n_topics:
-    # Need MORE topics → search HIGHER resolutions
-    search_range = (current_resolution, current_resolution * 10)
-else:
-    # Need FEWER topics → search LOWER resolutions
-    search_range = (0.001, current_resolution)
-```
-
-The search uses `ConsensusLeiden.find_optimal_resolution()` with binary search (20 steps):
-
-```
-lo, hi = search_range
-for step in range(20):
-    mid = (lo + hi) / 2
-    n_clusters = leiden_at_resolution(mid)
-    if n_clusters < target: lo = mid
-    else: hi = mid
-    track best (closest to target)
-```
-
-If the binary search overshoots (e.g., target 5 but minimum achievable is 7), the model falls back to `reduce_topics()` to merge down the remaining difference.
-
-**Why this matters:** On BBC News with 5 classes, clustering at the default resolution produces ~12 topics. The old approach merged 12 → 5 via greedy centroid-similarity merging, which produced NMI ≈ 0.04. The new approach finds a resolution that naturally produces 5 clusters, achieving NMI ≈ 0.70. This is a 17× improvement in cluster quality.
-
----
-
-## 7. Post-Fit Operations
-
-### 7.1 Outlier Reduction
-
-**Strategy: "embeddings" (default)**
-```python
-for each outlier document:
-    similarities = cosine_similarity(doc_embedding, all_topic_centroids)
-    best_topic = argmax(similarities)
-    if max_similarity > threshold:  # default: 0.35
-        assign to best_topic
-    else:
-        keep as outlier
-```
-
-**Strategy: "neighbors"**
-```python
-for each outlier document:
-    find k nearest non-outlier neighbors
-    assign by majority vote of their labels
-```
-
-After reassignment, keywords, centroids, and probabilities are recomputed.
-
-### 7.2 Topic Merging (Size-Aware)
-
-When reducing to a target topic count via `reduce_topics(n)`:
-
-```
-while n_topics > target:
-    1. Compute cosine similarity between all topic centroid pairs
-    2. Apply size-aware penalty:
-         sim[i,j] *= (min(size_i, size_j) / max(size_i, size_j))^0.3
-    3. Find the pair with highest adjusted similarity
-    4. Merge smaller topic into larger (keep larger's ID)
-    5. Relabel all member documents
-```
-
-**Why size-aware?** Without the penalty, two large topics of 500 documents each might merge before two small topics of 20 documents each, simply because large topics tend to have similar centroids (regression to the mean). The `(min/max)^0.3` penalty prefers merging small topics into large ones, preserving major theme boundaries.
-
-### 7.3 Manual Topic Merging
-
-`merge_topics([2, 7])` explicitly merges topics 2 and 7. The larger topic's ID is kept. Keywords, centroids, and probabilities are recomputed.
-
----
-
-## 8. Keyword Extraction Methods
-
-### 8.1 c-TF-IDF (Default)
-
-Class-based TF-IDF. All documents in a topic are concatenated into a single "class document."
-
-```
-1. Fit vocabulary on entire corpus (once, cached)
-2. Compute IDF: log(N / (1 + doc_freq_per_term))
-3. For each topic:
-   - Concatenate all topic documents
-   - Compute term frequencies
-   - Normalize: tf / sum(tf)
-   - Score: c-tfidf = normalized_tf × idf
-4. Return top n_keywords by score
-```
-
-**Rationale:** c-TF-IDF identifies words that are frequent within a topic but rare in the overall corpus. A word like "basketball" might appear in only 3% of all documents (high IDF) but in 80% of a sports topic's documents (high TF), making it a strong topic keyword.
-
-### 8.2 BM25
-
-Okapi BM25 relevance scoring with specificity adjustment.
-
-```
-1. Tokenize all documents (custom tokenizer: lowercase, alpha-only, stopword filter)
-2. Build BM25 index from corpus
-3. For each word in topic vocabulary:
-   - Compute average BM25 score within topic
-   - Compute average BM25 score across corpus
-   - Specificity = (topic_avg / corpus_avg) × log(1 + frequency)
-4. Return top n by specificity
-```
-
-**Rationale:** BM25 is more robust to document length variation than TF-IDF. It also handles term saturation better — a word appearing 10 times vs. 100 times in a long document doesn't get 10× the weight.
-
-### 8.3 KeyBERT
-
-Embedding-based keyword extraction using Maximal Marginal Relevance.
-
-```
-1. Concatenate all topic documents
-2. Extract candidate n-grams
-3. Embed candidates and topic text
-4. Score by cosine similarity to topic embedding
-5. Apply MMR to maximize diversity (diversity=0.5)
-6. Return top n
-```
-
-**Rationale:** KeyBERT captures semantic keywords that may not appear literally in the text. It also ensures keyword diversity through MMR, preventing near-duplicate keywords like "machine learning" and "learning machine" from both appearing.
-
----
-
-## 9. Prediction on New Documents
-
-```python
-new_labels = model.transform(new_documents)
-```
-
-**Algorithm:**
-1. Encode new documents using the same embedding model (full-dimensional, not reduced).
-2. Compute cosine similarity between new embeddings and stored `topic_embeddings_` (centroids from original training embeddings).
-3. Assign each document to the topic with highest similarity.
-4. Mark as outlier (-1) if max similarity < `outlier_threshold` (default: 0.35).
-
-**Key design choice:** Centroids are computed from **original (unrefined) embeddings**, not the iteratively refined ones. This ensures that new documents (which have not been refined) are compared in the same embedding space.
-
----
-
-## 10. Soft Topic Probabilities
-
-```python
-proba = model.transform_proba(new_documents)  # shape: (n_docs, n_topics)
-```
-
-**Algorithm:**
-```
-similarities = cosine_similarity(embeddings, topic_centroids)  # (n_docs, n_topics)
-probabilities = softmax(similarities × temperature, axis=1)    # temperature default: 5.0
-```
-
-**Temperature effect:**
-- temperature=1.0: Relatively flat distributions. A document with similarities [0.8, 0.7, 0.6] gets probabilities [0.37, 0.34, 0.29].
-- temperature=5.0 (default): Sharper peaks. Same similarities → [0.67, 0.24, 0.09].
-- temperature=10.0: Very peaked. Same similarities → [0.88, 0.10, 0.02].
-
----
-
-## 11. Cross-Lingual Support
-
-TriTopic supports topic modeling in multiple languages via the `language` parameter. This controls stopword filtering and, when set to `"multilingual"`, automatically selects a multilingual embedding model.
-
-**Supported languages:**
+**Metadata.** Columns are encoded per document (categorical: exact match, including strings and booleans;
+numerical and datetime: min-max scaled, similar if `1 - |Δ| > 0.8`). The metadata similarity of an edge,
+averaged over columns, is added with weight `metadata_weight` to **existing** edges only. Connecting every
+pair of documents that share a category would add O(n²) edges and let metadata dominate the topics.
 
-| Language | Stopwords | Default Embedding Model |
-|----------|-----------|------------------------|
-| `"english"` (default) | sklearn built-in | `all-MiniLM-L6-v2` |
-| `"german"` | Built-in list (250+ words) | `all-MiniLM-L6-v2` |
-| `"french"` | Built-in list | `all-MiniLM-L6-v2` |
-| `"spanish"` | Built-in list | `all-MiniLM-L6-v2` |
-| `"multilingual"` | None (disabled) | `BAAI/bge-m3` (auto-selected) |
+## 4. Consensus clustering
 
-**Usage:**
+1. Leiden (`RBConfigurationVertexPartition`, weighted) runs `n_consensus_runs` times with seeds
+   `random_state + i`.
+2. For every graph edge, the **agreement** is the share of runs that put both ends in the same cluster
+   (Lancichinetti & Fortunato, 2012).
+3. Edges with agreement below 50% are dropped (each node keeps its most consistent edge), the rest are
+   weighted by `agreement × original weight`, and Leiden runs again on this consensus graph.
+4. Steps 2-3 repeat until all runs agree or the consensus graph stops changing (max. 5 rounds); the run
+   with the highest mean ARI to the others is returned.
+5. Clusters smaller than `min_cluster_size` become outliers (-1).
 
-```python
-# German topic modeling
-model = TriTopic(language="german")
-model.fit_transform(german_documents)
+Memory and time grow with the number of edges. Earlier versions built an all-pairs co-occurrence matrix,
+which needed several GB beyond ~20k documents. `stability_score_` is the mean pairwise ARI of the initial
+runs.
 
-# Multilingual corpus (auto-selects bge-m3)
-model = TriTopic(language="multilingual")
-model.fit_transform(mixed_language_documents)
+## 5. Choosing the resolution
 
-# Multilingual with custom embedding model
-model = TriTopic(language="multilingual", embedding_model="custom/model")
-```
-
-**How it works:**
-
-1. The `language` parameter is propagated to the `GraphBuilder` (for TF-IDF stopword filtering) and `KeywordExtractor` (for keyword stopword removal).
-2. When `language="multilingual"` and no custom embedding model is specified, TriTopic automatically switches to `BAAI/bge-m3`, a state-of-the-art multilingual embedding model supporting 100+ languages.
-3. For multilingual mode, stopword filtering is disabled since no single stopword list covers all languages. The embedding model handles semantic separation.
-
----
+The Leiden resolution sets the granularity (higher = more topics).
 
-## 12. Hierarchical Topic Organization
+**`n_topics="auto"`** (with `auto_resolution=True`, default): on the initial graph, one Leiden run per
+resolution in `resolution_range` (default 0.01-1.0, 15 log-spaced steps). For each partition, keywords are
+extracted and scored by mean NPMI from the cached document-term matrix. TriTopic keeps the **coarsest**
+resolution whose coherence is within `auto_resolution_tolerance` (5%) of the best, among partitions whose
+largest topic holds at most `auto_resolution_max_share` (50%) of the documents. Very coarse partitions score
+high NPMI on generic, frequently co-occurring words; the share guard prevents collapses to two topics.
 
-TriTopic supports hierarchical topic exploration through two complementary methods: multi-resolution hierarchy building and single-topic division.
+On the development splits (3 seeds) this gave NMI 0.594 / ARI 0.474, against 0.565 / 0.415 for a fixed
+resolution. It still tends to find more topics than a corpus has classes.
 
-### 12.1 Multi-Resolution Hierarchy: `build_hierarchy()`
+**`n_topics=k`**: log-space bisection for a resolution with *k* clusters of at least `min_cluster_size`.
+The bracket widens (×4 steps) while the count still moves towards *k*; on very clean or very noisy graphs a
+fixed range silently missed the target. If the result overshoots, `reduce_topics(k)` merges down.
 
-Builds a tree of topics at multiple granularity levels by re-clustering the existing graph at different Leiden resolution values.
+**Fixed**: `auto_resolution=False` uses `resolution` (default 0.3; Leiden's usual 1.0 over-segments kNN
+graphs badly, e.g. 60 topics for 6 newsgroup categories).
 
-```python
-hierarchy = model.build_hierarchy(n_levels=3)
-print(hierarchy)  # TopicHierarchy(levels=3, topics_per_level=[3, 8, 15])
+## 6. Iterative refinement
 
-# Access specific levels
-coarse_topics = hierarchy.cut(0)   # Broad themes
-fine_topics = hierarchy.cut(2)     # Specific sub-topics
+After clustering, the graph-building embeddings (the reduced ones) are pulled towards their topic centroid
+and the semantic graph is re-clustered:
 
-# Navigate the tree
-for root in hierarchy.roots:
-    print(f"{root.node_id}: {root.keywords[:3]}")
-    for child in root.children:
-        print(f"  {child.node_id}: {child.keywords[:3]}")
 ```
-
-**Algorithm:**
-1. Auto-generate resolution levels geometrically spaced between `resolution/4` and `resolution*4`.
-2. Cluster at each resolution using Leiden.
-3. Link levels via majority-vote: each fine-grained node is assigned to the coarse-grained parent that contains the majority of its documents.
-4. Extract keywords for each node.
-
-### 12.2 Topic Division: `divide()`
-
-Splits a single topic into finer sub-topics by extracting its subgraph and re-clustering at higher resolution.
-
-```python
-subtopics = model.divide(topic_id=0, n_subtopics=3)
-for st in subtopics:
-    print(f"  Sub-topic {st.topic_id}: {st.keywords[:5]}")
+refined = (1 - b) · x + b · centroid,    b = blend · 1 / (1 + (d / median_d)²)
 ```
-
-**Note:** `divide()` modifies `model.labels_` in place and refreshes all downstream state (keywords, centroids, probabilities).
 
-### 12.3 API Reference
+`blend` decays from 0.3 to 0.1 over `max_iterations`; documents far from the centroid move less. The loop
+stops when the ARI between consecutive partitions reaches `convergence_threshold` (0.95). Refinement works
+in the reduced space directly; earlier versions re-projected the full embeddings through
+`UMAP.transform()` every iteration, which was slow and noisy. On the development benchmarks refinement does
+not hurt but has no clear effect either; it can be switched off with `use_iterative_refinement=False`.
 
-**TopicNode:**
-- `node_id` — Unique identifier (e.g., `"L0_3"`)
-- `is_leaf()` — True if no children
-- `get_subtopics(depth)` — Descendants up to *depth* levels
-- `flatten()` — This node and all descendants
+## 7. Keywords
 
-**TopicHierarchy:**
-- `n_levels` — Number of resolution levels
-- `cut(depth)` — All nodes at a given depth
-- `flatten()` — Every node in the hierarchy
-- `get_node(node_id)` — Look up by ID
+The corpus is tokenized once (`CountVectorizer`, uni- and bigrams, stop words of `language`,
+`min_df=2`, `max_df=0.95`). Tokens must start with two letters, so `000`, `__` or years never become
+keywords. The same counts feed the lexical view.
 
-**Visualization:** `model.visualize_hierarchy_tree()` renders the hierarchy as an interactive tree diagram (requires `build_hierarchy()` first).
+**Coverage-weighted c-TF-IDF** (`keyword_method="ctfidf"`, default):
 
----
-
-## 13. Per-Document Topic Analysis
-
-Beyond hard topic assignments, TriTopic provides fine-grained per-document analysis: which topics does a specific document belong to, and how do topics overlap across the corpus?
-
-### 13.1 Per-Document Topic Distribution: `get_document_topics()`
-
-Returns the top-N topics with probabilities for a single document.
-
-```python
-topics = model.get_document_topics(doc_idx=0, top_n=3)
-for topic_id, probability in topics:
-    print(f"  Topic {topic_id}: {probability:.4f}")
-```
-
-Supports both `"centroid"` (default) and `"graph"` methods via the `method` parameter or the global `soft_assignment_method` config.
-
-### 13.2 Topic Co-Occurrence: `topic_overlap_matrix()`
-
-Computes how often pairs of topics co-occur within documents. For each document, topics whose probability exceeds the threshold are considered "active". The matrix counts co-occurrences across all documents.
-
-```python
-overlap = model.topic_overlap_matrix(threshold=0.1)
-print(overlap)  # Symmetric DataFrame (n_topics × n_topics)
 ```
-
-The diagonal shows how many documents strongly belong to each topic. Off-diagonal values reveal topic pairs that frequently co-occur in the same documents.
-
-**Visualization:** `model.visualize_overlap(threshold=0.1)` renders the overlap matrix as an interactive heatmap.
-
----
-
-## 14. Evaluation Metrics
-
-```python
-metrics = model.evaluate()
+score(t) = IDF(t) · √( tf_share(t) · coverage(t) )
+tf_share(t) = share of the topic's tokens that are t
+coverage(t) = share of the topic's documents that contain t
+IDF(t)      = log(N / (1 + df(t)))
 ```
-
-Returns:
-- `coherence_mean`: Mean NPMI coherence across topics. Range [-1, 1]. Higher = better.
-- `coherence_std`: Standard deviation of per-topic coherence.
-- `diversity`: Proportion of unique keywords across all topics. Range [0, 1]. Higher = topics are more distinct.
-- `stability`: Average pairwise ARI across consensus Leiden runs. Range [-1, 1]. Higher = more reproducible.
-- `n_topics`: Number of non-outlier topics found.
-- `outlier_ratio`: Fraction of documents marked as outliers. 0.0 = perfect coverage.
-
----
-
-## 15. Complete Configuration Reference
-
-| Parameter | Default | Description | Rationale |
-|-----------|---------|-------------|-----------|
-| **Embedding** | | | |
-| `embedding_model` | `"all-MiniLM-L6-v2"` | Sentence-Transformer model | Best speed/quality tradeoff |
-| `embedding_batch_size` | `32` | Encoding batch size | Memory control |
-| `language` | `"english"` | Language for stopwords and auto-model selection | Supports english, german, french, spanish, multilingual |
-| **Dimensionality Reduction** | | | |
-| `use_dim_reduction` | `True` | Reduce before graph building | Dramatically improves kNN quality |
-| `reduced_dims` | `10` | Target dimensions | 10 retains most structure; <5 loses too much |
-| `dim_reduction_method` | `"umap"` | UMAP or PaCMAP | UMAP is better studied for clustering |
-| `umap_n_neighbors` | `15` | UMAP neighborhood size | Matches graph n_neighbors for consistency |
-| `umap_min_dist` | `0.0` | UMAP minimum distance | 0.0 is optimal for clustering (not visualization) |
-| **Graph Construction** | | | |
-| `n_neighbors` | `15` | k for kNN graphs | 15 is standard; increase for larger corpora |
-| `metric` | `"cosine"` | Distance metric | Cosine is standard for normalized embeddings |
-| `graph_type` | `"hybrid"` | Graph algorithm | Hybrid combines MkNN stability + SNN robustness |
-| `snn_weight` | `0.5` | SNN weight in hybrid | Equal contribution from both views |
-| **Multi-View Fusion** | | | |
-| `use_lexical_view` | `True` | Include TF-IDF view | Counters embedding blur |
-| `use_metadata_view` | `False` | Include metadata view | Enable when metadata is available |
-| `semantic_weight` | `0.5` | Semantic graph weight | Dominant view (contextual understanding) |
-| `lexical_weight` | `0.3` | Lexical graph weight | Secondary view (term precision) |
-| `metadata_weight` | `0.2` | Metadata graph weight | Supplementary view (structural priors) |
-| **Clustering** | | | |
-| `resolution` | `1.0` | Leiden resolution | Higher = more topics. 1.0 is balanced. |
-| `n_consensus_runs` | `10` | Number of Leiden runs | 7-10 is sufficient for stability |
-| `min_cluster_size` | `5` | Minimum topic size | Smaller → outlier. 5 prevents noise clusters. |
-| **Iterative Refinement** | | | |
-| `use_iterative_refinement` | `True` | Enable refinement loop | Significantly improves NMI (+5-15%) |
-| `max_iterations` | `5` | Maximum iterations | Convergence usually by iteration 3 |
-| `convergence_threshold` | `0.95` | ARI stopping criterion | 0.95 = partitions are practically identical |
-| **Keywords** | | | |
-| `n_keywords` | `10` | Keywords per topic | 10 gives good interpretability |
-| `n_representative_docs` | `5` | Representative docs per topic | 5 shows topic breadth |
-| `keyword_method` | `"ctfidf"` | Extraction method | c-TF-IDF is fast and effective |
-| **Outlier Handling** | | | |
-| `outlier_threshold` | `0.35` | Min similarity for topic assignment | Lower → more assignments, potentially noisier |
-| **Probability** | | | |
-| `softmax_temperature` | `5.0` | Softmax sharpness | 5.0 gives confident but not extreme probabilities |
-| `soft_assignment_method` | `"centroid"` | Method for soft probabilities (`"centroid"` or `"graph"`) | Centroid is faster; graph uses neighborhood structure |
-| **Misc** | | | |
-| `random_state` | `42` | Random seed | Reproducibility baseline |
-| `verbose` | `True` | Print progress | |
-
----
-
-## 16. Key Design Decisions & Rationale
-
-### Why Leiden over HDBSCAN?
-
-HDBSCAN produces outliers by design. In BERTopic, 10-30% of documents are discarded as noise. Leiden, operating on a graph, assigns every connected node to a community. By combining Leiden with consensus, TriTopic achieves both complete coverage and stable partitions.
-
-### Why consensus clustering instead of a single run?
-
-A single Leiden run depends on random initialization and can produce substantially different results with different seeds. Running 10 times and computing the co-occurrence matrix reveals which groupings are structural (consistent across runs) and which are artifacts (varying randomly). This is the difference between a measurement and a guess.
-
-### Why not concatenate the views?
-
-Concatenating a 384-dim semantic vector with a 10,000-dim TF-IDF vector would create a 10,384-dim space dominated by the sparse TF-IDF dimensions. Graph-based fusion avoids this: each view contributes a separate similarity signal, and the weights control their relative importance.
-
-### Why refine embeddings iteratively?
-
-Initial clusters have fuzzy boundaries. A document at the border between "AI Research" and "Software Engineering" might be assigned to either. By gently pulling it toward its assigned cluster's centroid and re-clustering, the model discovers whether this pull stabilizes (correct assignment) or the document switches clusters (incorrect assignment that gets corrected).
-
-### Why use original embeddings for centroids and transform?
-
-During iterative refinement, embeddings are modified to tighten clusters. These modifications are specific to the training data's cluster structure. New documents haven't undergone this refinement. If centroids were computed from refined embeddings, new documents would be compared in a different space. Using original embeddings for centroids ensures consistency.
-
-### Why distance-aware blending?
-
-Uniform blending (same pull for all documents) would drag borderline documents toward the wrong centroid if they were initially misassigned. The `sqrt(cosine_similarity)` scaling ensures that only confidently-assigned documents get fully pulled, while uncertain documents are treated conservatively.
-
-### Why the consensus bonus for cross-view edges?
-
-An edge supported by both semantic and lexical evidence is more reliable than one supported by only one view. The embedding might place two hotel reviews together because they're both positive, but TF-IDF would separate them because one mentions "breakfast" and the other "dinner." If both views agree that two documents are similar, that connection is very likely genuine.
-
-### Why size-aware topic merging?
 
-Without size-awareness, greedy merging by centroid similarity tends to merge large, broad topics first (their centroids are similar due to regression to the mean), destroying major thematic boundaries. The penalty `(min_size/max_size)^0.3` ensures small, peripheral topics are merged first, preserving the core structure.
+Term frequency alone favours words repeated in a few long documents; coverage alone favours boilerplate
+("thanks", "mail address"). The geometric mean raised NPMI coherence from 0.210 to 0.305 on the development
+splits at equal diversity. BERTopic's formula (`tf · log(1 + A/f)`) scored 0.193 in the same test.
 
-### Why bidirectional resolution search?
+**BM25** (`"bm25"`): average Okapi BM25 weight of a term in the topic's documents relative to the corpus
+average, times `log(1 + frequency)`. **KeyBERT** (`"keybert"`): embedding-based candidates with MMR.
 
-The resolution parameter directly controls Leiden's granularity. Higher resolution produces more clusters. When the user requests fewer topics than the natural count, decreasing resolution is far superior to merging. Merging post-hoc destroys coherent cluster structure; lower resolution produces naturally coherent coarser partitions.
+All topics are scored in one sparse product; `build_hierarchy()` and `divide()` reuse the cached matrix.
 
----
+## 8. Centroids, probabilities and new documents
 
-## 17. Benchmark Results
+- `topic_embeddings_`: mean of the unrefined embeddings per topic.
+- `probabilities_` (`soft_assignment_method="centroid"`): `softmax(cos(x, centroids) · softmax_temperature)`
+  (temperature 5). With `"graph"`, the topic distribution of a document's weighted graph neighbours.
+- `transform(docs)`: encode, nearest centroid by cosine; below `outlier_threshold` (0.35) → -1.
+  `transform_proba(docs)` returns the softmax distribution.
 
-Evaluated on 4 standard datasets, 3 seeds per configuration, 5 topic counts per dataset (60 runs per model).
+## 9. Post-fit operations
 
-### Overall
+All operations refresh keywords, centroids and probabilities and reuse the cached token counts.
 
-| Model | NMI | Coherence | Coverage | Runtime |
-|-------|-----|-----------|----------|---------|
-| **TriTopic** | **0.575** | **0.341** | **1.000** | 62.6s |
-| BERTopic | 0.513 | 0.233 | 0.808 | 10.9s |
-| NMF | 0.416 | 0.330 | 1.000 | 3.6s |
-| LDA | 0.299 | 0.161 | 1.000 | 8.6s |
+- **`reduce_outliers(strategy)`**: `"embeddings"` (nearest centroid above a threshold), `"neighbors"`
+  (majority vote of the nearest non-outlier documents), `"decisions"` (an LLM picks the topic or "other",
+  see §13).
+- **`reduce_topics(n, size_penalty=0.0)`**: repeatedly merges the two topics with the most similar
+  centroids. A size penalty `(min/max size)^p` is optional; the 0.3 used up to 2.4.0 merged small topics
+  into large unrelated ones (reducing 2k → k topics: NMI 0.542 without vs. 0.591 with the fix on the
+  evaluation splits). Graph-based agglomeration by modularity gain was tested and is worse.
+- **`merge_topics([ids])`**: merges the given topics into the largest one.
+- **`divide(topic_id, n_subtopics)`**: re-clusters the topic's subgraph with a resolution search in both
+  directions; the new topics get fresh ids.
 
-### Per-Dataset NMI
+## 10. Hierarchies and per-document analysis
 
-| Dataset | TriTopic | BERTopic | NMF | LDA |
-|---------|----------|----------|-----|-----|
-| 20 Newsgroups | **0.532** | 0.519 | 0.319 | 0.158 |
-| BBC News | **0.702** | 0.642 | 0.648 | 0.505 |
-| AG News | **0.527** | 0.380 | 0.191 | 0.027 |
-| Arxiv | **0.540** | 0.511 | 0.505 | 0.508 |
+**`build_hierarchy(n_levels=3)`** clusters the graph at resolutions spaced around `resolution_`
+(`/4 … ×4`) and links each fine node to the coarse node holding most of its documents.
+`TopicHierarchy.cut(depth)`, `flatten()`, `get_node(id)`; `visualize_hierarchy_tree()` draws it.
 
-### Cross-Seed Stability
+**`get_document_topics(doc_idx, top_n)`** returns the top topics of one document (centroid or graph method).
+**`topic_overlap_matrix(threshold)`** counts how often two topics are both "active" (probability above the
+threshold) in the same document; `visualize_overlap()` shows it as a heatmap.
 
-| Model | Mean NMI Std |
-|-------|-------------|
-| NMF | 0.005 |
-| **TriTopic** | **0.007** |
-| BERTopic | 0.011 |
-| LDA | 0.021 |
+## 11. Languages
 
-TriTopic achieves the highest NMI on every dataset with 100% coverage and near-deterministic reproducibility.
+`language` sets the stop words for keywords, the lexical view and coherence: `"english"` (scikit-learn
+list), `"german"`, `"french"`, `"spanish"` (built-in lists) or `"multilingual"` (no stop words). With
+`"multilingual"` and the default embedding model, TriTopic switches to `BAAI/bge-m3`. The token pattern
+accepts letters of any alphabet.
+
+## 12. LLM topic interpretation
+
+`tritopic.TopicInterpreter` (OpenAI Responses API with a strict JSON schema; default model `gpt-6-luna`;
+needs `OPENAI_API_KEY`, no extra package).
+
+**Evidence per topic.** The top 15 keywords; `n_docs` (8) example documents chosen by k-means on the topic's
+embeddings (the document nearest each cluster centre, largest cluster first), so a large sub-group gets
+several examples while the topic's spread is still covered; the three nearest topics for contrast; topic
+size and share; an optional `domain_hint`.
+
+**Answer** (`TopicInterpretation`): `label`, `description`, `aspects`, `verdict` (`coherent`, `mixed`,
+`unclear`), `sub_themes` (name, description, supporting example documents), `confidence`, `evidence`.
+`interpret(model)` writes labels and descriptions into `model.topics_` and stores all results in
+`model.interpretations_`.
+
+**`refine(model)`** splits a topic with `divide()` when
+
+1. the verdict is `mixed` with confidence ≥ 0.6,
+2. at least two sub-themes are each backed by ≥ 2 example documents (one stray article does not make a
+   topic mixed), and
+3. the acceptance rule holds (`accept="consistency"`, default): the example documents of different
+   sub-themes land in different new topics, each sub-theme's examples mostly in one. `"coherence"`
+   (keyword NPMI of the new topics beats the original), `"both"` and `"none"` are available.
+
+Rejected splits are undone; the new topics are interpreted. `summarize(model)` returns a short overview and
+a grouping of related topics (`model.overview_`).
+
+Acceptance rules compared on identical LLM verdicts (10 dataset settings × 2 interpretation runs):
+
+| Rule | Mean NMI gain | Worst case |
+|---|---|---|
+| none (keep every split) | +0.044 | −0.017 |
+| **consistency** (default) | +0.038 | −0.001 |
+| coherence | +0.033 | −0.021 |
+| both | +0.026 | −0.021 |
+
+With the default, `refine()` raised NMI from 0.614 to 0.658 on the development splits and from 0.606 to
+0.639 on the held-out evaluation splits (BBC with 3 topics: 0.716 → 0.859).
+
+**Model choice** (development splits, deliberately coarse topics, 28 topics of which 15 genuinely mixed):
+
+| Model | Mixed topics found | False alarms | refine(): NMI | Time per corpus |
+|---|---|---|---|---|
+| gpt-6-luna | 9 | 5 | 0.614 → 0.654 | 29 s |
+| gpt-5.5 | 8 | 9 | 0.614 → 0.638 | 41 s |
+| gpt-5.4-mini | 4 | 4 | 0.614 → 0.625 | 16 s |
+
+Two lessons from the development: farthest-point sampling of examples over-represented spread-out
+minorities (the BBC politics/business topic got one politics and six business examples), and keyword NPMI
+is a poor referee for splits (business keywords are naturally less coherent than political ones, so the
+correct split was rejected). Proportional sampling and the consistency check fixed both.
+
+## 13. LLM judgements via the Decisions API
+
+`tritopic.integrations.decisions` uses OpenAI's Decisions API (`POST /v1/decisions`, model `gpt-6-luna`,
+typed answers: `predicate` → probability, `choice` → one option, `score` → ordered levels). `DecisionsClient`
+runs requests in parallel, retries on 429/5xx and caches identical requests.
+
+| Function | Question type | What it does |
+|---|---|---|
+| `word_intrusion(keywords, client)` | choice | Top-5 keywords + one top keyword of another topic; which word does not belong? Returns accuracy and mean probability on the intruder (Chang et al., 2009). |
+| `rate_topics(keywords, client)` | score | 0 (unrelated) … 3 (one clear, nameable theme), optionally with example documents. |
+| `assign_documents(model, docs, client)` | choice | Assign documents to topics (label + keywords + 2 example snippets; with many topics the 10 nearest centroids are the candidates). `allow_other=True` adds an abstain option. |
+| `reduce_outliers(strategy="decisions")` | choice | As above with the abstain option; abstaining keeps the outlier. |
+| `suggest_merges(model, client)`, `apply_merges` | predicate | Asks for the most similar topic pairs whether they describe the same theme. |
+
+Measured on the evaluation splits: LLM topic rating 2.21 for TriTopic vs. 1.94 (BERTopic tuned) and 0.49
+(default); assignment accuracy 0.657 vs. 0.648 for nearest-centroid, about 74% on the documents it does not
+abstain on; merge judgements separate same-class pairs better than centroid cosine (AUC 0.63-0.75 vs.
+0.61-0.65) but are conservative, so merges rarely change NMI.
+
+## 14. Evaluation metrics
+
+`model.evaluate()`:
+
+- `coherence_mean`, `coherence_std`: NPMI of each topic's keywords over the **whole corpus** (document
+  co-occurrence; pairs that never co-occur count as -1; bigram keywords are matched with the keyword
+  analyzer). Not comparable with versions before 2.4, which used only each topic's own documents.
+- `diversity`: unique share of all topics' keywords.
+- `stability`: mean pairwise ARI of the consensus runs.
+- `n_topics`, `outlier_ratio`.
+
+Standalone in `tritopic.utils.metrics`: `compute_coherence`, `compute_coherence_batch`,
+`coherence_from_doc_term`, `compute_diversity`, `compute_stability`, `compute_silhouette`,
+`compute_downstream_score`.
+
+## 15. Configuration reference
+
+| Parameter | Default | Meaning |
+|---|---|---|
+| `language` | `"english"` | Stop words; `"multilingual"` selects `BAAI/bge-m3` |
+| `embedding_model` | `"all-MiniLM-L6-v2"` | sentence-transformers model |
+| `embedding_batch_size` | 32 | Encoding batch size |
+| `use_dim_reduction` | True | UMAP before graph building |
+| `reduced_dims` | 10 | Target dimensions |
+| `dim_reduction_method` | `"umap"` | or `"pacmap"` |
+| `umap_n_neighbors`, `umap_min_dist` | 15, 0.0 | UMAP parameters |
+| `reduced_metric` | `"euclidean"` | kNN metric on reduced embeddings |
+| `metric` | `"cosine"` | kNN metric without reduction |
+| `n_neighbors` | 15 | k of the kNN graphs |
+| `graph_type` | `"hybrid"` | `"knn"`, `"mutual_knn"`, `"snn"`, `"hybrid"` |
+| `snn_weight` | 0.5 | SNN share in the hybrid graph |
+| `use_lexical_view`, `use_metadata_view` | True, False | Views |
+| `semantic_weight`, `lexical_weight`, `metadata_weight` | 0.5, 0.3, 0.2 | View weights (renormalised) |
+| `auto_resolution` | True | Coherence-based resolution for `n_topics="auto"` |
+| `resolution_range` | None → (0.01, 1.0) | Scan range |
+| `auto_resolution_steps` | 15 | Resolutions scanned |
+| `auto_resolution_tolerance` | 0.05 | Within 5% of the best coherence |
+| `auto_resolution_max_share` | 0.5 | Skip partitions dominated by one topic |
+| `resolution` | 0.3 | Start of the `n_topics=k` search; used if `auto_resolution=False` |
+| `n_consensus_runs` | 10 | Leiden runs per consensus |
+| `min_cluster_size` | 5 | Smaller clusters become outliers |
+| `use_iterative_refinement` | True | Refinement loop |
+| `max_iterations`, `convergence_threshold` | 5, 0.95 | Loop limits |
+| `n_keywords`, `n_representative_docs` | 10, 5 | Per topic |
+| `keyword_method` | `"ctfidf"` | or `"bm25"`, `"keybert"` |
+| `soft_assignment_method` | `"centroid"` | or `"graph"` |
+| `softmax_temperature` | 5.0 | Sharpness of probabilities |
+| `outlier_threshold` | 0.35 | `transform()` cut-off |
+| `random_state`, `verbose` | 42, True | |
+
+## 16. Design decisions and the evidence behind them
+
+| Decision | Evidence (development splits unless noted) |
+|---|---|
+| Leiden on a kNN graph instead of HDBSCAN | 0% vs. 18% outliers; NMI 0.582 vs. 0.439 (evaluation splits) |
+| Consensus of 10 runs | NMI spread across seeds 0.014 vs. 0.105 for BERTopic |
+| Lexical view on | Without it NMI −0.05 (ablation) |
+| Graph variants, UMAP dims, k = 30 | Within seed noise of the defaults; defaults kept |
+| Euclidean kernel on UMAP output | Small but consistent gain over cosine; cosine is geometrically wrong there |
+| Coverage-weighted c-TF-IDF | NPMI 0.305 vs. 0.210 (old) and 0.193 (BERTopic formula) |
+| Coherence-based auto resolution with share guard | NMI 0.594 vs. 0.565 (fixed 0.3); worst run 0.390 vs. 0.041 without the guard |
+| No size penalty in `reduce_topics` | 2k → k: NMI 0.632 vs. 0.492 (dev), 0.591 vs. 0.542 (evaluation) |
+| `gpt-6-luna` for interpretation | Most mixed topics found, best refine() gain |
+
+All experiments are archived in [`benchmarks/experiments`](../benchmarks/experiments/README.md).
+
+## 17. Performance
+
+Fit times with pre-computed embeddings (one machine, sequential runs):
+
+| Corpus | TriTopic 2.3 | TriTopic 2.4 | BERTopic tuned |
+|---|---|---|---|
+| 20 Newsgroups, 2,000 short posts | 35 s | 7 s | 6 s |
+| arXiv, 2,000 papers (55k characters each) | 102 s | 23 s | 50 s |
+| 20 Newsgroups, 17,900 posts | 148 s | 34-44 s | — |
+
+The one-time UMAP fit dominates on short texts, tokenization on long ones. `TopicInterpreter` adds about
+2-3 s per topic of API time (parallelised over 8 workers).

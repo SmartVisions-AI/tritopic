@@ -68,6 +68,37 @@ class DecisionsError(RuntimeError):
     """Raised when the Decisions API returns an error that retries cannot fix."""
 
 
+def tls_context() -> ssl.SSLContext:
+    """System trust store if ``truststore`` is installed (corporate proxies), else certifi/default."""
+    try:
+        import truststore
+        return truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    except ImportError:
+        return ssl.create_default_context()
+
+
+def post_json(url: str, body: dict, api_key: str, ssl_context, timeout: float = 60.0,
+              max_retries: int = 4, error_prefix: str = "OpenAI API") -> dict:
+    """POST JSON with retries on 408/409/429/5xx and network errors (exponential backoff)."""
+    req = urllib.request.Request(
+        url, data=json.dumps(body).encode(),
+        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}, method="POST",
+    )
+    for attempt in range(max_retries + 1):
+        try:
+            with urllib.request.urlopen(req, timeout=timeout, context=ssl_context) as resp:
+                return json.loads(resp.read())
+        except urllib.error.HTTPError as e:
+            detail = e.read().decode(errors="replace")[:500]
+            if e.code not in (408, 409, 429) and e.code < 500 or attempt == max_retries:
+                raise DecisionsError(f"{error_prefix} HTTP {e.code}: {detail}") from e
+        except (urllib.error.URLError, TimeoutError) as e:
+            if attempt == max_retries:
+                raise DecisionsError(f"{error_prefix} unreachable: {e}") from e
+        time.sleep(min(2 ** attempt + random.random(), 30))
+    raise DecisionsError("unreachable")  # pragma: no cover
+
+
 @dataclass
 class DecisionsClient:
     """
@@ -102,11 +133,7 @@ class DecisionsClient:
         self.api_key = self.api_key or os.environ.get("OPENAI_API_KEY")
         if not self.api_key:
             raise ValueError("No API key: pass api_key or set OPENAI_API_KEY.")
-        try:
-            import truststore
-            self._ssl = truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-        except ImportError:
-            self._ssl = ssl.create_default_context()
+        self._ssl = tls_context()
 
     def decide(self, input: str | list, questions: list[dict]) -> dict[str, dict]:
         """Ask *questions* about *input*; returns ``{question name: answer}``."""
@@ -128,26 +155,10 @@ class DecisionsClient:
             return list(pool.map(lambda r: self.decide(*r), requests))
 
     def _post(self, body: dict) -> dict:
-        req = urllib.request.Request(
-            f"{self.base_url}/decisions",
-            data=json.dumps(body).encode(),
-            headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"},
-            method="POST",
-        )
-        for attempt in range(self.max_retries + 1):
-            try:
-                with urllib.request.urlopen(req, timeout=self.timeout, context=self._ssl) as resp:
-                    self.n_requests += 1
-                    return json.loads(resp.read())
-            except urllib.error.HTTPError as e:
-                detail = e.read().decode(errors="replace")[:500]
-                if e.code not in (408, 409, 429) and e.code < 500 or attempt == self.max_retries:
-                    raise DecisionsError(f"Decisions API HTTP {e.code}: {detail}") from e
-            except (urllib.error.URLError, TimeoutError) as e:
-                if attempt == self.max_retries:
-                    raise DecisionsError(f"Decisions API unreachable: {e}") from e
-            time.sleep(min(2 ** attempt + random.random(), 30))
-        raise DecisionsError("unreachable")  # pragma: no cover
+        data = post_json(f"{self.base_url}/decisions", body, self.api_key, self._ssl,
+                         self.timeout, self.max_retries, error_prefix="Decisions API")
+        self.n_requests += 1
+        return data
 
 
 def _answer_value(answer: dict | None, kind: str, default=None):

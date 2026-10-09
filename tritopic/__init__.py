@@ -1,24 +1,22 @@
 """
-TriTopic: Tri-Modal Graph Topic Modeling with Iterative Refinement
-===================================================================
+TriTopic: graph-based topic modeling
+=====================================
 
-A state-of-the-art topic modeling library that combines:
-- Semantic embeddings (Sentence-BERT, Instructor, BGE)
-- Lexical similarity (BM25)
-- Metadata context (optional)
+Fuses three views of a corpus into one document graph:
+- semantic: sentence-transformer embeddings (reduced with UMAP)
+- lexical: TF-IDF similarity
+- metadata (optional): reweights edges between documents with similar metadata
 
-With advanced techniques:
-- Leiden clustering with consensus
-- Mutual kNN + SNN graph construction
-- Iterative refinement loop
-- LLM-powered topic labeling
+and finds topics with consensus Leiden clustering. Keywords come from a
+coverage-weighted c-TF-IDF; an optional LLM (``TopicInterpreter``) labels,
+explains and checks the topics.
 
 Basic usage:
 -----------
 >>> from tritopic import TriTopic
 >>> model = TriTopic()
->>> topics = model.fit_transform(documents)
->>> model.visualize()
+>>> labels = model.fit_transform(documents)
+>>> model.get_topic_info()
 
 Author: Roman Egger
 License: MIT
@@ -34,6 +32,7 @@ from tritopic.core.embeddings import EmbeddingEngine
 from tritopic.core.keywords import KeywordExtractor
 from tritopic.core.hierarchy import TopicNode, TopicHierarchy
 from tritopic.labeling.llm_labeler import LLMLabeler, SimpleLabeler
+from tritopic.labeling.interpreter import TopicInterpreter, TopicInterpretation
 from tritopic.visualization.plotter import TopicVisualizer
 
 __all__ = [
@@ -48,6 +47,8 @@ __all__ = [
     "KeywordExtractor",
     "LLMLabeler",
     "SimpleLabeler",
+    "TopicInterpreter",
+    "TopicInterpretation",
     "TopicVisualizer",
 ]
 
