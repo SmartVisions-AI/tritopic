@@ -26,3 +26,7 @@ NUL
 # Secrets
 .env
 .env.*
+
+# archived old version and stray files
+_archiv_v2.2.0/
+nul

@@ -248,6 +248,8 @@ reference: [user guide §14](docs/user_guide.md#14-research-charts).
 
 ## How it works
 
+![How TriTopic works in seven steps](docs/how_tritopic_works.png)
+
 ```
 documents ─► embeddings ─► UMAP (10d) ─► semantic kNN graph ─┐
           └► token counts ─► TF-IDF ───► lexical kNN graph ──┼─► fused graph ─► consensus Leiden ─► topics
