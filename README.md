@@ -36,7 +36,7 @@ ahead are in [Benchmarks](#benchmarks).
 (source: [`examples/bbc_demo/index.html`](examples/bbc_demo/index.html)): six runs against BERTopic, LLM
 interpretation, codebook seeds and every research output.
 
-**Learn it:** [user guide with code for every task](docs/user_guide.md) · [11 runnable examples](examples/) ·
+**Learn it:** [user guide with code for every task](docs/user_guide.md) · [12 runnable examples](examples/) ·
 [technical documentation](docs/docs.md)
 
 ---
@@ -63,7 +63,7 @@ interpretation, codebook seeds and every research output.
 ## Installation
 
 ```bash
-pip install git+https://github.com/SmartVisions-AI/tritopic.git        # 2.5 (this repository)
+pip install git+https://github.com/SmartVisions-AI/tritopic.git        # 2.5.1 (this repository)
 pip install tritopic                                                    # latest PyPI release (2.3.0)
 ```
 
@@ -120,6 +120,7 @@ The [user guide](docs/user_guide.md) walks through every task with code. Each st
 | [`09_seeded_topics.py`](examples/09_seeded_topics.py) | Codebook mode: seeded and emergent topics |
 | [`10_research_toolkit.py`](examples/10_research_toolkit.py) | Reliability, saturation, bridges, prevalence, group tests, evolution, quotes, methods text |
 | [`11_codebook_and_second_coder.py`](examples/11_codebook_and_second_coder.py) | Coding scheme with anchor quotes, LLM second coder (kappa) |
+| [`12_topic_evolution_news.py`](examples/12_topic_evolution_news.py) | Topic births and deaths in 11 years of real news (HuffPost 2012-2022) |
 
 ## Let an LLM interpret the topics
 
@@ -216,7 +217,7 @@ intercoder_reliability(model, client)    # LLM: second coder, Cohen's kappa and 
 | Saturation curve | The qualitative-research question "have we seen every theme?" answered exactly (topic accumulation curve) | 95% of topics visible after 25-35% of the data, all after 45-65% |
 | Bridge documents | Hybrid cases between topics, from the graph | — |
 | Group comparison | Significance tests and effect sizes per topic, corrected for multiple testing | — |
-| Topic evolution | How topic *content* splits and merges over time, not just frequency | — |
+| Topic evolution | How topic *content* is born, splits, merges and dies over time, not just frequency | HuffPost news 2012-2022: COVID (2020) and the Ukraine war (2022) detected as new topics |
 | Codebook + second coder | From topics to a coding scheme for manual content analysis, with inter-coder agreement | BBC demo: kappa 0.94 |
 | Methods paragraph | Reproducible description of the analysis for the paper | — |
 

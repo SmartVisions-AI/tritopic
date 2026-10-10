@@ -54,6 +54,7 @@ print("\nWords typical for long vs. short posts:\n",
 
 # --- 6. Topic evolution: births, splits, merges and deaths over time --------------------------
 # 20 Newsgroups has no usable dates, so we simulate: graphics posts only appear in 2024.
+# Real dated news: examples/12_topic_evolution_news.py
 rng = np.random.default_rng(0)
 dates = pd.Timestamp("2023-01-01") + pd.to_timedelta(rng.integers(0, 730, len(documents)), unit="D")
 late = newsgroup == "comp.graphics"

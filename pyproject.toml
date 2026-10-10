@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tritopic"
-version = "2.5.0"
+version = "2.5.1"
 description = "TriTopic: graph-based topic modeling that fuses semantic, lexical and metadata views with consensus Leiden clustering, plus LLM topic interpretation. Outperforms BERTopic in head-to-head benchmarks with identical embeddings."
 readme = "README.md"
 license = {text = "MIT"}

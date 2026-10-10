@@ -163,6 +163,12 @@ def test_topic_evolution_finds_birth(model, corpus):
     assert set(lineage.period) <= {"2024Q3", "2024Q4"}, "medicine only exists in the second half"
     births = evo.events[(evo.events.event == "birth")]
     assert any(n in set(lineage.node) for n in births.node)
+    # every period topic lists its documents, all from its own period
+    quarters = pd.to_datetime(pd.Series(dates)).dt.to_period("Q").astype(str).to_numpy()
+    for r in evo.nodes.itertuples():
+        assert len(r.docs) == r.size and set(quarters[r.docs]) == {r.period}
+    with pytest.raises(ValueError):
+        topic_evolution(model, dates[:-1])
 
 
 def test_topic_quotes(model, corpus):

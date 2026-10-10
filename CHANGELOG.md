@@ -1,5 +1,20 @@
 # Changelog
 
+## 2.5.1 (October 2026)
+
+### Changed
+
+- **`topic_evolution()` tested on real dated news and redesigned.** On HuffPost news 2012-2022 (16,400
+  articles) the 2.5.0 version, which clustered each period's part of the global graph, kept only about 5 of
+  28 edges per document and produced mostly noise (70% of period topics "born"). Each period now gets its
+  own kNN graph in the model's layout, clustered at 4× the model's resolution (`resolution=` to override),
+  and `link_threshold` defaults to 0.75. Result: the COVID pandemic (2020, continuing as vaccines in 2021)
+  and the war in Ukraine (2022) are detected as births at every tested sample size, together with events
+  such as the Flint water crisis, the Hong Kong protests and Roe v. Wade.
+- `TopicEvolution.nodes` has a `docs` column (document indices); `events` carry keywords and size;
+  mismatched timestamp counts raise an error.
+- Example `12_topic_evolution_news.py` on real dated news.
+
 ## 2.5.0 (October 2026)
 
 Codebook mode and a research toolkit: start from the topics you expect, and get the reliability,

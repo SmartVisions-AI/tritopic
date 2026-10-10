@@ -161,7 +161,7 @@ TriTopic(language="multilingual")                  # switches to BAAI/bge-m3 (10
 ```
 
 Metadata only strengthens edges between documents that are already similar in content; it never connects
-unrelated documents. For how topics change content over time, see `topic_evolution()` in §11.
+unrelated documents. For how topics change content over time, see `topic_evolution()` in §11 and example 12.
 
 ## 8. Let an LLM interpret the topics
 
@@ -295,9 +295,18 @@ distinctive_keywords(model, df["country"], "AT", "DE", topic_id=3)        # ... 
 ```python
 evo = topic_evolution(model, df["date"], freq="Q")        # "M", "Q", "Y"
 evo.events                                                # birth / continuation / split / merge / death
+evo.events[evo.events.event == "birth"]                   # what was new, with keywords
+evo.nodes.docs                                            # document indices of each period topic
 evo.lineage(3)                                            # period topics of global topic 3
 plot_evolution(evo).show()                                # Sankey diagram
 ```
+
+Each period gets its own graph and is clustered finer than the global model (`resolution=4 ×
+model.resolution_`), so a new event inside a broad topic shows up as a birth. Topics of consecutive
+periods are linked when their centroids have cosine ≥ `link_threshold` (0.75); lower it for fewer
+births, raise it for more. Use periods with at least a few hundred documents. A theme that skips a period
+counts as a new birth. Real-data walkthrough (HuffPost news 2012-2022, finds COVID in 2020 and the war in
+Ukraine in 2022): [`examples/12_topic_evolution_news.py`](../examples/12_topic_evolution_news.py).
 
 **Quotes and the methods section**
 
