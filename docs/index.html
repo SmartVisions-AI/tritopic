@@ -347,6 +347,38 @@ pre code { background: none; padding: 0; font: inherit; color: var(--ink); }
 .ex details[open] summary { margin-bottom: 8px; }
 .ex .gh { font-size: 0.82rem; color: var(--petrol); }
 .note { background: color-mix(in srgb, var(--amber) 12%, var(--surface)); border: 1px solid color-mix(in srgb, var(--amber) 45%, var(--surface)); border-radius: 10px; padding: 12px 16px; font-size: 0.9rem; color: var(--ink); }
+
+nav.menu details.grp > summary { list-style: none; display: grid; grid-template-columns: minmax(0, 1fr) 28px; align-items: center; margin-top: 6px; }
+nav.menu details.grp > summary::-webkit-details-marker { display: none; }
+nav.menu details.grp > summary a.part-link { margin-top: 0; }
+nav.menu .chev { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 6px; cursor: pointer; color: var(--ink-2); font-size: 0.8rem; transition: transform 0.15s ease; }
+nav.menu .chev:hover { background: var(--chip); color: var(--ink); }
+nav.menu details.grp[open] > summary .chev { transform: rotate(90deg); }
+nav.menu .sub { margin-bottom: 6px; }
+.menu-tools { display: flex; gap: 6px; }
+.menu-tools button { font: 700 0.75rem/1 var(--body); padding: 6px 9px; border-radius: 6px; border: 1px solid var(--line-strong); background: var(--surface); color: var(--ink-2); cursor: pointer; }
+.menu-tools button:hover { color: var(--ink); }
+.ftable td { vertical-align: top; }
+.ftable td:first-child { min-width: 14rem; }
+.ftable td:last-child code { white-space: nowrap; }
+.fit { display: inline-block; font: 700 0.72rem/1 var(--body); letter-spacing: 0.04em; text-transform: uppercase; padding: 5px 8px; border-radius: 999px; white-space: nowrap; }
+.fit.good { background: color-mix(in srgb, var(--good) 15%, var(--surface)); color: var(--good); }
+.fit.less { background: color-mix(in srgb, var(--amber) 22%, var(--surface)); color: #8A5300; }
+:root[data-theme="dark"] .fit.less { color: var(--amber); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .fit.less { color: var(--amber); } }
+.example-flow { display: grid; grid-template-columns: minmax(0, 260px) 40px minmax(0, 1fr); gap: 12px; align-items: center; }
+.pile { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; display: grid; gap: 8px; box-shadow: 4px 4px 0 var(--line), 8px 8px 0 color-mix(in srgb, var(--line) 60%, transparent); }
+.pile b { font: 800 2.2rem/1 var(--display); color: var(--ink); }
+.pile span { font-size: 0.86rem; color: var(--ink-2); }
+.pile i { font-size: 0.8rem; color: var(--ink-2); border-top: 1px solid var(--line); padding-top: 6px; }
+.flow-arrow { font-size: 1.8rem; color: var(--petrol); text-align: center; }
+.piles { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+.topic-card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; display: grid; gap: 8px; align-content: start; }
+.topic-card.new { border-color: var(--amber); }
+.tc-head { display: grid; gap: 2px; }
+.tc-head span { font-size: 0.78rem; color: var(--ink-2); }
+.topic-card p { font-size: 0.82rem; color: var(--ink-2); font-style: italic; }
+@media (max-width: 760px) { .example-flow { grid-template-columns: minmax(0, 1fr); } .flow-arrow { transform: rotate(90deg); } }
 /* responsive: menu becomes a drawer */
 @media (max-width: 960px) {
   .site { grid-template-columns: minmax(0, 1fr); }
@@ -374,7 +406,8 @@ details.code-ex pre { border: 0; background: var(--bg); }
 <div class="site">
   <aside class="side" id="side">
     <div class="brand"><b>TriTopic</b><span>Graph-based topic modeling for research · v2.6.0</span></div>
-    <nav class="menu" aria-label="Contents"><a class="part-link" href="#overview">Overview</a><div class="sub"><a href="#ov-numbers">Head-to-head with BERTopic</a><a href="#ov-features">What you get</a><a href="#ov-fit">Good fit / keep in mind</a></div><a class="part-link" href="#how">How it works</a><div class="sub"><a href="#how-diagram">The pipeline</a><a href="#how-steps">Seven steps</a><a href="#how-layers">Optional layers</a></div><a class="part-link" href="#start">Get started</a><div class="sub"><a href="#start-install">Install</a><a href="#start-quick">Your first model</a><a href="#start-next">Then</a></div><a class="part-link" href="#guide">User guide</a><div class="sub"><a href="#guide-1-installation">1. Installation</a><a href="#guide-2-quick-start">2. Quick start</a><a href="#guide-3-your-own-data">3. Your own data</a><a href="#guide-4-how-many-topics">4. How many topics?</a><a href="#guide-5-shaping-the-topics-after-fitting">5. Shaping the topics after fitting</a><a href="#guide-6-new-documents-saving-and-loading">6. New documents, saving and loading</a><a href="#guide-7-metadata-time-and-languages">7. Metadata, time and languages</a><a href="#guide-8-let-an-llm-interpret-the-topics">8. Let an LLM interpret the topics</a><a href="#guide-9-typed-llm-judgements-decisions-api">9. Typed LLM judgements (Decisions API)</a><a href="#guide-10-start-from-a-codebook-seeded-topics">10. Start from a codebook (seeded topics)</a><a href="#guide-11-research-toolkit">11. Research toolkit</a><a href="#guide-12-codebook-and-second-coder-for-manual-coding">12. Codebook and second coder for manual coding</a><a href="#guide-13-evaluation-and-visualization">13. Evaluation and visualization</a><a href="#guide-14-research-charts">14. Research charts</a><a href="#guide-15-configuration-recipes">15. Configuration recipes</a><a href="#guide-16-faq-and-troubleshooting">16. FAQ and troubleshooting</a></div><a class="part-link" href="#examples">Examples</a><div class="sub"><a href="#ex-01_quickstart">01 · Quick start: fit TriTopic and look at the topics.</a><a href="#ex-02_your_own_data">02 · Your own data: CSV in, configured model, results back into the table.</a><a href="#ex-03_shape_the_topics">03 · Shape the topics after fitting: granularity, outliers, merging, splitting, hierarchy.</a><a href="#ex-04_new_documents_and_saving">04 · Assign new documents and save/load a model.</a><a href="#ex-05_metadata_time_and_languages">05 · Metadata, topics over time, and other languages.</a><a href="#ex-06_llm_interpretation">06 · Let an LLM interpret the topics: labels, descriptions, mixed-topic detection, overview.</a><a href="#ex-07_decisions_api">07 · Typed LLM judgements with the OpenAI Decisions API: rate topics, assign documents, merge.</a><a href="#ex-08_evaluate_and_visualize">08 · Evaluate a model and create every visualization.</a><a href="#ex-09_seeded_topics">09 · Codebook mode: start from the topics you expect, let the rest emerge.</a><a href="#ex-10_research_toolkit">10 · Research toolkit: the numbers you need for a paper.</a><a href="#ex-11_codebook_and_second_coder">11 · From topics to a coding scheme, checked by an LLM second coder.</a><a href="#ex-12_topic_evolution_news">12 · Topic evolution on real dated news: which themes are born, split, merge and die?</a><a href="#ex-13_research_charts">13 · Research charts: sixteen views of a fitted model, saved as interactive HTML files.</a></div><a class="part-link" href="#results">Results on BBC</a><div class="sub"><a href="#res-six-runs-compared">Six runs compared</a><a href="#res-the-llm-reads-every-topic">The LLM reads every topic</a><a href="#res-every-dot-is-an-article">Every dot is an article</a><a href="#res-how-tritopic-picks-the-number-of-topics">How TriTopic picks the number of topics</a><a href="#res-start-from-the-categories-you-expect">Start from the categories you expect</a><a href="#res-which-topics-can-you-trust">Which topics can you trust?</a><a href="#res-have-we-seen-every-topic">Have we seen every topic?</a><a href="#res-where-topics-meet-and-how-big-they-are">Where topics meet, and how big they are</a><a href="#res-do-long-articles-cover-different-topics-than-short-ones">Do long articles cover different topics than short ones?</a><a href="#res-what-was-new-year-by-year">What was new, year by year?</a><a href="#res-a-coding-scheme-written-from-the-topics">A coding scheme, written from the topics</a><a href="#res-would-an-independent-reader-assign-the-same-topics">Would an independent reader assign the same topics?</a><a href="#res-methods-paragraph">Methods paragraph</a><a href="#res-what-this-run-shows">What this run shows</a></div><a class="part-link" href="#charts">Chart gallery</a><div class="sub"><a href="#chart-the-periodic-table-of-topics">The periodic table of topics</a><a href="#chart-what-holds-a-topic-together-meaning-wording-or-both">What holds a topic together: meaning, wording, or both?</a><a href="#chart-how-do-the-topics-split-when-you-zoom-in">How do the topics split when you zoom in?</a><a href="#chart-core-and-edge-of-every-topic">Core and edge of every topic</a><a href="#chart-is-a-keyword-carried-by-the-whole-topic-or-by-a-few-articles">Is a keyword carried by the whole topic or by a few articles?</a><a href="#chart-which-topics-are-neighbours">Which topics are neighbours?</a><a href="#chart-how-sharp-are-the-topic-borders">How sharp are the topic borders?</a><a href="#chart-do-long-and-short-articles-cover-different-topics">Do long and short articles cover different topics?</a><a href="#chart-which-topics-can-go-into-the-paper">Which topics can go into the paper?</a><a href="#chart-what-is-inside-each-topic">What is inside each topic?</a><a href="#chart-when-did-themes-appear-and-when-did-they-fade">When did themes appear, and when did they fade?</a><a href="#chart-how-much-does-the-codebook-explain-and-what-emerged-on-its-o">How much does the codebook explain, and what emerged on its own?</a><a href="#chart-one-sentence-per-topic">One sentence per topic</a><a href="#chart-what-the-llm-thought-of-each-topic-and-what-happened-next">What the LLM thought of each topic, and what happened next</a><a href="#chart-where-does-the-second-coder-disagree">Where does the second coder disagree?</a><a href="#chart-when-does-each-topic-become-visible">When does each topic become visible?</a><a href="#chart-charts-we-decided-against">Charts we decided against</a></div><a class="part-link" href="#tech">Technical docs</a><div class="sub"><a href="#tech-1-design-principles">1. Design principles</a><a href="#tech-2-the-pipeline-step-by-step">2. The pipeline step by step</a><a href="#tech-3-graph-construction">3. Graph construction</a><a href="#tech-4-consensus-clustering">4. Consensus clustering</a><a href="#tech-5-choosing-the-resolution">5. Choosing the resolution</a><a href="#tech-6-iterative-refinement">6. Iterative refinement</a><a href="#tech-7-keywords">7. Keywords</a><a href="#tech-8-centroids-probabilities-and-new-documents">8. Centroids, probabilities and new documents</a><a href="#tech-9-post-fit-operations">9. Post-fit operations</a><a href="#tech-10-hierarchies-and-per-document-analysis">10. Hierarchies and per-document analysis</a><a href="#tech-11-languages">11. Languages</a><a href="#tech-12-llm-topic-interpretation">12. LLM topic interpretation</a><a href="#tech-13-llm-judgements-via-the-decisions-api">13. LLM judgements via the Decisions API</a><a href="#tech-14-evaluation-metrics">14. Evaluation metrics</a><a href="#tech-15-configuration-reference">15. Configuration reference</a><a href="#tech-16-design-decisions-and-the-evidence-behind-them">16. Design decisions and the evidence behind them</a><a href="#tech-17-performance">17. Performance</a><a href="#tech-18-seeded-topics-codebook-mode">18. Seeded topics (codebook mode)</a><a href="#tech-19-research-toolkit">19. Research toolkit</a><a href="#tech-20-research-charts">20. Research charts</a></div><a class="part-link" href="#benchmarks">Benchmarks</a><a class="part-link" href="#changelog">Changelog</a><div class="sub"><a href="#cl-260-october-2026">2.6.0 (October 2026)</a><a href="#cl-251-october-2026">2.5.1 (October 2026)</a><a href="#cl-250-october-2026">2.5.0 (October 2026)</a><a href="#cl-240-october-2026">2.4.0 (October 2026)</a><a href="#cl-230-february-2026">2.3.0 (February 2026)</a><a href="#cl-22x">2.2.x</a></div><a class="part-link" href="#cite">Cite and licence</a></nav>
+    <div class="menu-tools"><button type="button" id="expandall">Expand all</button><button type="button" id="collapseall">Collapse all</button></div>
+    <nav class="menu" aria-label="Contents"><details class="grp"><summary><a class="part-link" href="#overview">What is TriTopic?</a><span class="chev" role="button" aria-label="Show sections of What is TriTopic?">▶</span></summary><div class="sub"><a href="#ov-intro">In plain words</a><a href="#ov-example">Example: hotel reviews</a><a href="#ov-functions">What you can do</a><a href="#ov-fit">Where it fits, and where less</a></div></details><details class="grp"><summary><a class="part-link" href="#how">How it works</a><span class="chev" role="button" aria-label="Show sections of How it works">▶</span></summary><div class="sub"><a href="#how-diagram">The pipeline</a><a href="#how-steps">Seven steps</a><a href="#how-layers">Optional layers</a></div></details><details class="grp"><summary><a class="part-link" href="#start">Get started</a><span class="chev" role="button" aria-label="Show sections of Get started">▶</span></summary><div class="sub"><a href="#start-install">Install</a><a href="#start-quick">Your first model</a><a href="#start-next">Then</a></div></details><details class="grp"><summary><a class="part-link" href="#guide">User guide</a><span class="chev" role="button" aria-label="Show sections of User guide">▶</span></summary><div class="sub"><a href="#guide-1-installation">1. Installation</a><a href="#guide-2-quick-start">2. Quick start</a><a href="#guide-3-your-own-data">3. Your own data</a><a href="#guide-4-how-many-topics">4. How many topics?</a><a href="#guide-5-shaping-the-topics-after-fitting">5. Shaping the topics after fitting</a><a href="#guide-6-new-documents-saving-and-loading">6. New documents, saving and loading</a><a href="#guide-7-metadata-time-and-languages">7. Metadata, time and languages</a><a href="#guide-8-let-an-llm-interpret-the-topics">8. Let an LLM interpret the topics</a><a href="#guide-9-typed-llm-judgements-decisions-api">9. Typed LLM judgements (Decisions API)</a><a href="#guide-10-start-from-a-codebook-seeded-topics">10. Start from a codebook (seeded topics)</a><a href="#guide-11-research-toolkit">11. Research toolkit</a><a href="#guide-12-codebook-and-second-coder-for-manual-coding">12. Codebook and second coder for manual coding</a><a href="#guide-13-evaluation-and-visualization">13. Evaluation and visualization</a><a href="#guide-14-research-charts">14. Research charts</a><a href="#guide-15-configuration-recipes">15. Configuration recipes</a><a href="#guide-16-faq-and-troubleshooting">16. FAQ and troubleshooting</a></div></details><details class="grp"><summary><a class="part-link" href="#examples">Examples</a><span class="chev" role="button" aria-label="Show sections of Examples">▶</span></summary><div class="sub"><a href="#ex-01_quickstart">01 · Quick start: fit TriTopic and look at the topics.</a><a href="#ex-02_your_own_data">02 · Your own data: CSV in, configured model, results back into the table.</a><a href="#ex-03_shape_the_topics">03 · Shape the topics after fitting: granularity, outliers, merging, splitting, hierarchy.</a><a href="#ex-04_new_documents_and_saving">04 · Assign new documents and save/load a model.</a><a href="#ex-05_metadata_time_and_languages">05 · Metadata, topics over time, and other languages.</a><a href="#ex-06_llm_interpretation">06 · Let an LLM interpret the topics: labels, descriptions, mixed-topic detection, overview.</a><a href="#ex-07_decisions_api">07 · Typed LLM judgements with the OpenAI Decisions API: rate topics, assign documents, merge.</a><a href="#ex-08_evaluate_and_visualize">08 · Evaluate a model and create every visualization.</a><a href="#ex-09_seeded_topics">09 · Codebook mode: start from the topics you expect, let the rest emerge.</a><a href="#ex-10_research_toolkit">10 · Research toolkit: the numbers you need for a paper.</a><a href="#ex-11_codebook_and_second_coder">11 · From topics to a coding scheme, checked by an LLM second coder.</a><a href="#ex-12_topic_evolution_news">12 · Topic evolution on real dated news: which themes are born, split, merge and die?</a><a href="#ex-13_research_charts">13 · Research charts: sixteen views of a fitted model, saved as interactive HTML files.</a></div></details><details class="grp"><summary><a class="part-link" href="#results">Results on BBC</a><span class="chev" role="button" aria-label="Show sections of Results on BBC">▶</span></summary><div class="sub"><a href="#res-six-runs-compared">Six runs compared</a><a href="#res-the-llm-reads-every-topic">The LLM reads every topic</a><a href="#res-every-dot-is-an-article">Every dot is an article</a><a href="#res-how-tritopic-picks-the-number-of-topics">How TriTopic picks the number of topics</a><a href="#res-start-from-the-categories-you-expect">Start from the categories you expect</a><a href="#res-which-topics-can-you-trust">Which topics can you trust?</a><a href="#res-have-we-seen-every-topic">Have we seen every topic?</a><a href="#res-where-topics-meet-and-how-big-they-are">Where topics meet, and how big they are</a><a href="#res-do-long-articles-cover-different-topics-than-short-ones">Do long articles cover different topics than short ones?</a><a href="#res-what-was-new-year-by-year">What was new, year by year?</a><a href="#res-a-coding-scheme-written-from-the-topics">A coding scheme, written from the topics</a><a href="#res-would-an-independent-reader-assign-the-same-topics">Would an independent reader assign the same topics?</a><a href="#res-methods-paragraph">Methods paragraph</a><a href="#res-what-this-run-shows">What this run shows</a></div></details><details class="grp"><summary><a class="part-link" href="#charts">Chart gallery</a><span class="chev" role="button" aria-label="Show sections of Chart gallery">▶</span></summary><div class="sub"><a href="#chart-the-periodic-table-of-topics">The periodic table of topics</a><a href="#chart-what-holds-a-topic-together-meaning-wording-or-both">What holds a topic together: meaning, wording, or both?</a><a href="#chart-how-do-the-topics-split-when-you-zoom-in">How do the topics split when you zoom in?</a><a href="#chart-core-and-edge-of-every-topic">Core and edge of every topic</a><a href="#chart-is-a-keyword-carried-by-the-whole-topic-or-by-a-few-articles">Is a keyword carried by the whole topic or by a few articles?</a><a href="#chart-which-topics-are-neighbours">Which topics are neighbours?</a><a href="#chart-how-sharp-are-the-topic-borders">How sharp are the topic borders?</a><a href="#chart-do-long-and-short-articles-cover-different-topics">Do long and short articles cover different topics?</a><a href="#chart-which-topics-can-go-into-the-paper">Which topics can go into the paper?</a><a href="#chart-what-is-inside-each-topic">What is inside each topic?</a><a href="#chart-when-did-themes-appear-and-when-did-they-fade">When did themes appear, and when did they fade?</a><a href="#chart-how-much-does-the-codebook-explain-and-what-emerged-on-its-o">How much does the codebook explain, and what emerged on its own?</a><a href="#chart-one-sentence-per-topic">One sentence per topic</a><a href="#chart-what-the-llm-thought-of-each-topic-and-what-happened-next">What the LLM thought of each topic, and what happened next</a><a href="#chart-where-does-the-second-coder-disagree">Where does the second coder disagree?</a><a href="#chart-when-does-each-topic-become-visible">When does each topic become visible?</a><a href="#chart-charts-we-decided-against">Charts we decided against</a></div></details><details class="grp"><summary><a class="part-link" href="#tech">Technical docs</a><span class="chev" role="button" aria-label="Show sections of Technical docs">▶</span></summary><div class="sub"><a href="#tech-1-design-principles">1. Design principles</a><a href="#tech-2-the-pipeline-step-by-step">2. The pipeline step by step</a><a href="#tech-3-graph-construction">3. Graph construction</a><a href="#tech-4-consensus-clustering">4. Consensus clustering</a><a href="#tech-5-choosing-the-resolution">5. Choosing the resolution</a><a href="#tech-6-iterative-refinement">6. Iterative refinement</a><a href="#tech-7-keywords">7. Keywords</a><a href="#tech-8-centroids-probabilities-and-new-documents">8. Centroids, probabilities and new documents</a><a href="#tech-9-post-fit-operations">9. Post-fit operations</a><a href="#tech-10-hierarchies-and-per-document-analysis">10. Hierarchies and per-document analysis</a><a href="#tech-11-languages">11. Languages</a><a href="#tech-12-llm-topic-interpretation">12. LLM topic interpretation</a><a href="#tech-13-llm-judgements-via-the-decisions-api">13. LLM judgements via the Decisions API</a><a href="#tech-14-evaluation-metrics">14. Evaluation metrics</a><a href="#tech-15-configuration-reference">15. Configuration reference</a><a href="#tech-16-design-decisions-and-the-evidence-behind-them">16. Design decisions and the evidence behind them</a><a href="#tech-17-performance">17. Performance</a><a href="#tech-18-seeded-topics-codebook-mode">18. Seeded topics (codebook mode)</a><a href="#tech-19-research-toolkit">19. Research toolkit</a><a href="#tech-20-research-charts">20. Research charts</a></div></details><details class="grp"><summary><a class="part-link" href="#changelog">Changelog</a><span class="chev" role="button" aria-label="Show sections of Changelog">▶</span></summary><div class="sub"><a href="#cl-260-october-2026">2.6.0 (October 2026)</a><a href="#cl-251-october-2026">2.5.1 (October 2026)</a><a href="#cl-250-october-2026">2.5.0 (October 2026)</a><a href="#cl-240-october-2026">2.4.0 (October 2026)</a><a href="#cl-230-february-2026">2.3.0 (February 2026)</a><a href="#cl-22x">2.2.x</a></div></details><a class="part-link" href="#cite">Cite and licence</a><details class="grp"><summary><a class="part-link" href="#benchmarks">Comparison with BERTopic</a><span class="chev" role="button" aria-label="Show sections of Comparison with BERTopic">▶</span></summary><div class="sub"><a href="#cmp-numbers">Key numbers</a></div></details></nav>
     <div class="side-foot"><a href="https://github.com/SmartVisions-AI/tritopic">GitHub repository</a><span>MIT licence · SmartVisions</span></div>
   </aside>
 
@@ -385,7 +418,7 @@ details.code-ex pre { border: 0; background: var(--bg); }
     <div class="hero">
       <span class="eyebrow">Topic modeling for research</span>
       <h1>TriTopic</h1>
-      <p class="lede">TriTopic finds the topics in a collection of documents by reading them through three lenses at once: what they <b>mean</b>, which <b>words</b> they use, and, if you have it, their <b>metadata</b>. It weaves all documents into one network, lets a community-detection algorithm vote ten times on where the groups are, and describes each topic with keywords that are both frequent and widely shared. On top, it lets you start from a codebook, lets an LLM read and name the topics, and gives you the numbers a paper needs.</p>
+      <p class="lede">TriTopic is a Python library that reads a large collection of texts and tells you what they are about: which themes come up, how often, in which words, and how sure you can be about each of them.</p>
       <div class="cta">
         <a class="btn primary" href="https://github.com/SmartVisions-AI/tritopic">View on GitHub</a>
         <a class="btn ghost" href="#start">Get started</a>
@@ -393,40 +426,77 @@ details.code-ex pre { border: 0; background: var(--bg); }
       </div>
       <div class="install">pip install git+https://github.com/SmartVisions-AI/tritopic.git</div>
     </div>
-    <div class="stack" id="ov-numbers">
-      <h2>Head-to-head with BERTopic</h2>
-      <p class="prose muted">Four datasets × five topic counts × three seeds, identical embeddings for both tools. Details in <a href="#benchmarks">Benchmarks</a>.</p>
-      <div class="stats">
-        <div class="stat"><b>0.582</b><span>NMI against the true classes (BERTopic 0.439)</span></div>
-        <div class="stat"><b>0%</b><span>documents left without a topic (BERTopic 18.4%)</span></div>
-        <div class="stat"><b>0.262</b><span>keyword coherence, NPMI (BERTopic 0.117)</span></div>
-        <div class="stat"><b>0.014</b><span>NMI spread across random seeds (BERTopic 0.105)</span></div>
+
+    <div class="stack" id="ov-intro">
+      <h2>What TriTopic does, in plain words</h2>
+      <div class="prose doc">
+        <p>Nobody can read 10,000 survey answers, interviews or customer reviews one by one and keep an overview. Topic modeling does the first pass for you: it sorts the texts into piles by subject, names each pile with its typical words, and counts how big each pile is. You then read the piles, not the whole stack.</p>
+        <p>TriTopic sorts the texts like three careful readers who compare notes. The first reader looks at what a text <b>means</b>, so "the room was freezing" and "heating didn't work" land on the same pile. The second looks at which <b>words</b> are used, which keeps apart texts that sound alike but are about different things. The third, if you have it, looks at <b>extra information</b> such as the source or the date. The three readers then vote ten times on where the piles are; only groupings they agree on survive. That is why TriTopic gives nearly the same result every time you run it, and why every text ends up on a pile instead of in a "could not sort" heap.</p>
       </div>
     </div>
-    <div class="stack" id="ov-features">
-      <h2>What you get</h2>
-      <div class="features">
-        <a class="feature" href="#how"><h3>One graph, three views</h3><p>Meaning, wording and metadata in one network. Topics that one view alone would blur stay apart.</p></a>
-        <a class="feature" href="#tech-4-consensus-clustering"><h3>Consensus clustering</h3><p>Leiden runs ten times and the runs vote. Results barely change between seeds, and every document gets a topic.</p></a>
-        <a class="feature" href="#guide-4-how-many-topics"><h3>Automatic topic count</h3><p>Scans 15 granularities and keeps the coarsest one whose keywords are nearly as coherent as the best.</p></a>
-        <a class="feature" href="#guide-8-let-an-llm-interpret-the-topics"><h3>LLM interpreter</h3><p>An LLM names every topic, explains it, flags topics that mix two themes and splits them if the graph agrees.</p></a>
-        <a class="feature" href="#guide-10-start-from-a-codebook-seeded-topics"><h3>Codebook mode</h3><p>Describe the topics you expect in one sentence each; the rest of the corpus can still form new topics.</p></a>
-        <a class="feature" href="#guide-11-research-toolkit"><h3>Research toolkit</h3><p>Reliability per topic, saturation, bridge documents, group tests, topic evolution, quotes and a methods paragraph.</p></a>
-        <a class="feature" href="#guide-12-codebook-and-second-coder-for-manual-coding"><h3>Coding scheme and second coder</h3><p>Turns topics into a codebook with real anchor quotes, and checks it with an LLM coder (Cohen's kappa).</p></a>
-        <a class="feature" href="#charts"><h3>Sixteen research charts</h3><p>From a periodic table of topics to the Tri-View triangle and topic birth timelines; seven chart types exist nowhere else.</p></a>
+
+    <div class="stack" id="ov-example">
+      <h2>An example: 2,400 hotel reviews</h2>
+      <p class="prose muted">A hotel group wants to know what its guests write about. Illustrative example with invented reviews; the <a href="#results">BBC run</a> further down shows real output.</p>
+      <div class="example-flow">
+        <div class="pile"><b>2,400</b><span>guest reviews, unsorted</span><i>"Great breakfast, but the street noise kept us up…"</i><i>"Staff upgraded our room without asking…"</i><i>"€25 a night for parking is too much…"</i></div>
+        <div class="flow-arrow" aria-hidden="true">→</div>
+        <div class="piles">
+          <div class="topic-card"><div class="tc-head"><b>Breakfast and food</b><span>22% · reliable</span></div><div class="kw"><span>breakfast</span><span>buffet</span><span>coffee</span><span>fresh</span></div><p>"The breakfast buffet alone was worth the stay."</p></div>
+          <div class="topic-card"><div class="tc-head"><b>Friendly staff</b><span>19% · reliable</span></div><div class="kw"><span>staff</span><span>friendly</span><span>reception</span><span>helpful</span></div><p>"Reception went out of their way to find us a cot."</p></div>
+          <div class="topic-card"><div class="tc-head"><b>Location and transport</b><span>17% · reliable</span></div><div class="kw"><span>location</span><span>station</span><span>walk</span><span>centre</span></div><p>"Five minutes from the station, ten from the old town."</p></div>
+          <div class="topic-card"><div class="tc-head"><b>Noise at night</b><span>11% · reliable</span></div><div class="kw"><span>noise</span><span>street</span><span>night</span><span>windows</span></div><p>"Rooms facing the street are loud until 2 am."</p></div>
+          <div class="topic-card new"><div class="tc-head"><b>Parking fees</b><span>4% · not on anyone's list</span></div><div class="kw"><span>parking</span><span>garage</span><span>fee</span><span>night</span></div><p>"€25 a night for the garage is simply too much."</p></div>
+        </div>
+      </div>
+      <div class="prose doc">
+        <p>For every pile you get its <b>name and a short description</b> (written by an LLM if you want), its <b>keywords</b>, its <b>share</b> of all reviews with an uncertainty range, <b>real sentences</b> you can quote, and a <b>reliability score</b> that tells you whether the pile would come out the same with somewhat different data. If the hotel already has categories it wants to track ("breakfast", "staff", "cleanliness"), it can give them to TriTopic as a starting point, and themes nobody expected, like the parking fees here, still appear as their own piles. With dates, TriTopic also shows when a theme first came up.</p>
       </div>
     </div>
-    <div class="honest" id="ov-fit">
-      <div class="card"><h3>Good fit</h3><ul>
-        <li>Research projects that need to report how reliable and complete the topics are</li>
-        <li>Corpora where every document should be assigned (surveys, interviews, reviews)</li>
-        <li>Mixed deductive and inductive coding: some categories known, others to discover</li>
-        <li>News, reviews, abstracts, transcripts; English, German, French, Spanish or 100+ languages</li></ul></div>
-      <div class="card"><h3>Keep in mind</h3><ul>
-        <li>Automatic mode tends to find more topics than a corpus has classes; pass <code>n_topics</code> or use seeds when you know the granularity</li>
-        <li>On short texts BERTopic is 1-2 s faster per run</li>
-        <li>The LLM features need an OpenAI API key; everything else runs locally</li>
-        <li>Bootstrap reliability and the fuzzy-borders chart refit the model several times, so they take a few minutes on large corpora</li></ul></div>
+
+    <div class="stack" id="ov-functions">
+      <h2>What you can do with TriTopic</h2>
+      <div class="table-scroll doc-table"><table class="ftable">
+        <thead><tr><th>You want to…</th><th>TriTopic…</th><th>How</th></tr></thead>
+        <tbody>
+          <tr><td><b>Find the topics</b> in a collection of texts</td><td>Groups every text into a topic and describes each topic with keywords; no text is left over</td><td><a href="#start-quick"><code>TriTopic().fit(texts)</code></a></td></tr>
+          <tr><td><b>Decide how many topics</b> make sense</td><td>Chooses the number automatically, takes a number you give, or shows how topics split when you zoom in</td><td><a href="#guide-4-how-many-topics"><code>n_topics</code></a>, <a href="#chart-how-do-the-topics-split-when-you-zoom-in"><code>resolution_ladder()</code></a></td></tr>
+          <tr><td>Get <b>readable names and descriptions</b></td><td>Lets an LLM name and explain every topic, and splits topics that mix two themes</td><td><a href="#guide-8-let-an-llm-interpret-the-topics"><code>TopicInterpreter</code></a></td></tr>
+          <tr><td><b>Start from categories you already know</b></td><td>Uses a one-sentence description per category as a starting point; unknown themes still emerge</td><td><a href="#guide-10-start-from-a-codebook-seeded-topics"><code>fit(texts, seeds=…)</code></a></td></tr>
+          <tr><td><b>Sort new texts</b> into the existing topics</td><td>Assigns new texts (with probabilities) and flags texts that fit no topic</td><td><a href="#guide-6-new-documents-saving-and-loading"><code>transform()</code></a></td></tr>
+          <tr><td>Use <b>source, rating or date</b> as extra information</td><td>Strengthens links between similar texts that share metadata</td><td><a href="#guide-7-metadata-time-and-languages"><code>use_metadata_view</code></a></td></tr>
+          <tr><td><b>Follow topics over time</b></td><td>Shows which themes appear, split, merge and fade, period by period</td><td><a href="#guide-11-research-toolkit"><code>topic_evolution()</code></a></td></tr>
+          <tr><td><b>Compare groups</b> (countries, sources, customer segments)</td><td>Topic shares per group with confidence intervals, significance tests and the words that separate the groups</td><td><a href="#guide-11-research-toolkit"><code>compare_groups()</code></a></td></tr>
+          <tr><td>Know <b>which topics you can trust</b></td><td>Refits on parts of the data and scores how stable each topic is</td><td><a href="#guide-11-research-toolkit"><code>topic_reliability()</code></a></td></tr>
+          <tr><td>Check whether you <b>have enough data</b></td><td>Shows after how many texts no new topics appear (saturation)</td><td><a href="#guide-11-research-toolkit"><code>saturation_curve()</code></a></td></tr>
+          <tr><td>Find <b>texts between two topics</b></td><td>Lists bridge texts and how strongly topics are connected</td><td><a href="#guide-11-research-toolkit"><code>bridge_documents()</code></a></td></tr>
+          <tr><td><b>Quote</b> real examples</td><td>Picks the most telling sentences per topic</td><td><a href="#guide-11-research-toolkit"><code>topic_quotes()</code></a></td></tr>
+          <tr><td>Prepare <b>manual coding</b></td><td>Writes a coding scheme with definitions and anchor examples, and checks it with an LLM second coder (Cohen's kappa)</td><td><a href="#guide-12-codebook-and-second-coder-for-manual-coding"><code>codebook()</code></a></td></tr>
+          <tr><td>Write the <b>methods section</b></td><td>Drafts the paragraph and parameter table from the fitted model</td><td><a href="#guide-11-research-toolkit"><code>methods_report()</code></a></td></tr>
+          <tr><td><b>Show the results</b></td><td>Sixteen research charts, document maps and topic hierarchies</td><td><a href="#charts"><code>charts.plot_…()</code></a></td></tr>
+          <tr><td>Work in <b>other languages</b></td><td>German, French and Spanish stop words built in; 100+ languages with a multilingual model</td><td><a href="#guide-7-metadata-time-and-languages"><code>language=</code></a></td></tr>
+          <tr><td>See <b>coarse and fine levels</b></td><td>Builds a topic tree from broad themes down to sub-topics</td><td><a href="#guide-5-shaping-the-topics-after-fitting"><code>build_hierarchy()</code></a></td></tr>
+        </tbody></table></div>
+    </div>
+
+    <div class="stack" id="ov-fit">
+      <h2>Where TriTopic fits, and where it fits less</h2>
+      <div class="table-scroll doc-table"><table class="ftable">
+        <thead><tr><th>Use case</th><th>Fit</th><th>Why</th></tr></thead>
+        <tbody>
+          <tr><td>Open survey answers, interviews, customer reviews, support tickets</td><td><span class="fit good">Well suited</span></td><td>Every text gets a topic, topics are stable between runs, and you can start from your own categories.</td></tr>
+          <tr><td>Research that has to report how the topics were found</td><td><span class="fit good">Well suited</span></td><td>Reliability per topic, saturation, significance tests, coding scheme with inter-coder agreement and a ready methods paragraph.</td></tr>
+          <tr><td>Mixed coding: some categories known, others to discover</td><td><span class="fit good">Well suited</span></td><td>Seeds pin the known categories while new themes still form their own topics.</td></tr>
+          <tr><td>News, social media and media monitoring over time</td><td><span class="fit good">Well suited</span></td><td>Topic evolution marks new and fading themes (tested on eleven years of news).</td></tr>
+          <tr><td>Collections from a few hundred to tens of thousands of texts</td><td><span class="fit good">Well suited</span></td><td>1,000 texts take seconds, 18,000 texts well under a minute with pre-computed embeddings.</td></tr>
+          <tr><td>Texts in several languages</td><td><span class="fit good">Well suited</span></td><td>With a multilingual embedding model, texts in different languages about the same theme end up together.</td></tr>
+          <tr><td>Very short snippets (single words, hashtags, 3-word titles)</td><td><span class="fit less">Less suited</span></td><td>Both the meaning and the wording view have too little to work with; group or concatenate snippets first.</td></tr>
+          <tr><td>Long documents that each cover many themes (books, long reports)</td><td><span class="fit less">Less suited as is</span></td><td>TriTopic gives each text one main topic. Split long documents into paragraphs or sections first.</td></tr>
+          <tr><td>Millions of texts</td><td><span class="fit less">Less suited</span></td><td>The graph and the ten-run vote grow with the corpus; beyond about 100,000 texts it is untested. Fit on a sample, then <code>transform()</code> the rest.</td></tr>
+          <tr><td>A fixed list of categories that must not change</td><td><span class="fit less">Less suited</span></td><td>TriTopic discovers topics. If the categories are fixed and you have labelled examples, a supervised classifier is the better tool.</td></tr>
+          <tr><td>Live streams where new themes must appear immediately</td><td><span class="fit less">Less suited</span></td><td><code>transform()</code> sorts new texts into known topics; finding new themes needs a refit.</td></tr>
+        </tbody></table></div>
+      <p class="prose muted">The LLM features (names, descriptions, coding scheme, second coder) need an OpenAI API key. Everything else runs on your own machine.</p>
     </div>
   </section>
 
@@ -3057,9 +3127,167 @@ rank with a fixed eight-colour palette (further topics grey), so colours stay th
 </table></div></div>
   </section>
 
-  <!-- ===================== BENCHMARKS ===================== -->
+  <!-- ===================== CHANGELOG ===================== -->
+  <section class="part" id="changelog">
+    <header class="part-head"><span class="eyebrow">Changelog</span><h2 class="part-title">Release notes</h2></header>
+    <div class="doc"><h3 id="cl-260-october-2026">2.6.0 (October 2026)</h3>
+<h4 id="cl-new">New</h4>
+<ul>
+<li><strong><code>tritopic.visualization.charts</code></strong>: sixteen research charts (Plotly) — topic table, Tri-View triangle,
+  zoom ladder, topic onions, keyword barcode, constellation, fuzzy borders, group tilt, trust quadrant,
+  composition, birth timeline, codebook coverage, quote wall, LLM verdict board, coder confusion grid,
+  saturation with topic dots.</li>
+<li><strong>Structure analyses</strong> in <code>tritopic.research</code>: <code>view_composition()</code>, <code>resolution_ladder()</code>,
+  <code>topic_cores()</code>, <code>keyword_coverage()</code>, <code>coassignment()</code>, <code>topic_discovery()</code>, <code>codebook_coverage()</code>.</li>
+<li><strong>Website</strong> <code>docs/index.html</code>: how it works, user guide, all examples with code, live BBC results,
+  the chart gallery with code for every chart, technical documentation, benchmarks.</li>
+<li>Example <code>13_research_charts.py</code>; <code>docs/algorithm_visual_brief.md</code> (brief for an algorithm illustration).</li>
+</ul>
+<h4 id="cl-fixed">Fixed</h4>
+<ul>
+<li>BBC demo: topic labels in the prevalence chart were cut off; the chart now wraps long labels.</li>
+</ul>
+<h3 id="cl-251-october-2026">2.5.1 (October 2026)</h3>
+<h4 id="cl-changed">Changed</h4>
+<ul>
+<li><strong><code>topic_evolution()</code> tested on real dated news and redesigned.</strong> On HuffPost news 2012-2022 (16,400
+  articles) the 2.5.0 version, which clustered each period's part of the global graph, kept only about 5 of
+  28 edges per document and produced mostly noise (70% of period topics "born"). Each period now gets its
+  own kNN graph in the model's layout, clustered at 4× the model's resolution (<code>resolution=</code> to override),
+  and <code>link_threshold</code> defaults to 0.75. Result: the COVID pandemic (2020, continuing as vaccines in 2021)
+  and the war in Ukraine (2022) are detected as births at every tested sample size, together with events
+  such as the Flint water crisis, the Hong Kong protests and Roe v. Wade.</li>
+<li><code>TopicEvolution.nodes</code> has a <code>docs</code> column (document indices); <code>events</code> carry keywords and size;
+  mismatched timestamp counts raise an error.</li>
+<li>Example <code>12_topic_evolution_news.py</code> on real dated news.</li>
+</ul>
+<h3 id="cl-250-october-2026">2.5.0 (October 2026)</h3>
+<p>Codebook mode and a research toolkit: start from the topics you expect, and get the reliability,
+saturation, group-comparison and reporting outputs a paper needs.</p>
+<h4 id="cl-new_1">New</h4>
+<ul>
+<li><strong>Seeded topics (codebook mode)</strong>: <code>fit(documents, seeds={"name": "description" | [words]})</code>. The
+  documents that match a seed best are pinned to one Leiden community per seed (<code>is_membership_fixed</code>);
+  all other documents join a seeded topic or form emergent ones. <code>TopicInfo.seed</code>, <code>seed_topics_</code>,
+  <code>emergent_topics_</code>, <code>seed_anchors_</code>, a <code>Seed</code> column in <code>get_topic_info()</code>; <code>seed_embeddings</code> for
+  pre-computed embeddings; config <code>seed_anchors</code>, <code>seed_keyword_weight</code>. Full codebook on the dev splits:
+  NMI 0.625 → 0.661, ARI 0.515 → 0.624; held-out ARI 0.399 → 0.498.</li>
+<li><strong><code>tritopic.research</code></strong>:</li>
+<li><code>topic_reliability()</code>: bootstrap refits (default) or consensus runs; reliability and core share per
+    topic, <code>document_stability_</code> per document. Reliable topics (≥ 0.7) were 77% pure vs. 54% below 0.5.</li>
+<li><code>saturation_curve()</code> / <code>plot_saturation()</code>: exact topic accumulation curve (hypergeometric), saturation
+    points for 95% and 100% of the topics, optional refit method.</li>
+<li><code>bridge_documents()</code>, <code>topic_connections()</code>: documents and links between topics.</li>
+<li><code>topic_prevalence()</code> with Wilson or bootstrap intervals; <code>compare_groups()</code> with χ²/Fisher tests,
+    Cramér's V, odds ratios and Benjamini-Hochberg correction; <code>distinctive_keywords()</code> (log-odds with
+    informative prior).</li>
+<li><code>topic_evolution()</code> / <code>plot_evolution()</code>: per-period topics linked into births, splits, merges, deaths.</li>
+<li><code>topic_quotes()</code>: citable sentences per topic.</li>
+<li><code>methods_report()</code>: methods paragraph and parameter table from the fitted model.</li>
+<li><strong><code>TopicInterpreter.codebook()</code></strong>: codebook entries for qualitative content analysis (definition,
+  inclusion/exclusion criteria, coding notes) with real anchor quotes.</li>
+<li><strong><code>intercoder_reliability()</code></strong> (Decisions API): an LLM as independent second coder; Cohen's kappa,
+  per-topic precision/recall/F1, confusion matrix. BBC demo: kappa 0.94.</li>
+<li>Examples <code>09_seeded_topics.py</code>, <code>10_research_toolkit.py</code>, <code>11_codebook_and_second_coder.py</code>; user guide
+  <code>docs/user_guide.md</code>; BBC demo extended with all new outputs.</li>
+</ul>
+<h4 id="cl-changed_1">Changed</h4>
+<ul>
+<li><code>transform()</code> outlier threshold is calibrated on the training data by default
+  (<code>outlier_threshold=None</code> → 1st percentile of the training similarities, <code>model.outlier_threshold_</code>).
+  The fixed 0.35 rejected up to 40% of in-domain documents; the calibrated rule about 1%.</li>
+</ul>
+<h4 id="cl-fixed_1">Fixed</h4>
+<ul>
+<li><code>fit(verbose=True)</code> with automatic resolution crashed when printing the scan summary.</li>
+</ul>
+<h3 id="cl-240-october-2026">2.4.0 (October 2026)</h3>
+<p>Head-to-head with BERTopic on identical embeddings: NMI 0.582 vs. 0.439, ARI 0.440 vs. 0.285, keyword NPMI
+0.262 vs. 0.117, 0% vs. 18% outliers (4 datasets × 5 topic counts × 3 seeds). See the README benchmarks.</p>
+<h4 id="cl-new_2">New</h4>
+<ul>
+<li><strong><code>TopicInterpreter</code></strong> (<code>tritopic.labeling</code>): an LLM reads each topic (keywords, proportionally sampled
+  example documents, neighbouring topics) and returns label, description, aspects and a verdict
+  (coherent / mixed / unclear) with sub-themes. <code>refine()</code> splits mixed topics when the graph split agrees
+  with the LLM's sub-themes; <code>summarize()</code> writes an overview. OpenAI Responses API with a strict JSON
+  schema, default model <code>gpt-6-luna</code>.</li>
+<li><strong>OpenAI Decisions API integration</strong> (<code>tritopic.integrations.decisions</code>, optional): LLM word-intrusion
+  test and topic ratings, <code>assign_documents()</code>, <code>reduce_outliers(strategy="decisions")</code>, merge suggestions.</li>
+<li><strong>Automatic topic count</strong>: <code>n_topics="auto"</code> picks the Leiden resolution by keyword coherence, skipping
+  partitions dominated by one topic (<code>auto_resolution</code>, <code>resolution_range</code>, <code>auto_resolution_steps</code>,
+  <code>auto_resolution_tolerance</code>, <code>auto_resolution_max_share</code>; results in <code>resolution_</code>, <code>resolution_search_</code>).</li>
+<li><strong>Coverage-weighted c-TF-IDF</strong>: <code>IDF · √(tf_share · coverage)</code>, +45% NPMI on the dev splits.</li>
+<li>Benchmark harness <code>benchmarks/compare_bertopic.py</code>, <code>llm_eval.py</code>, <code>summarize.py</code>,
+  <code>results_to_markdown.py</code>; decision log in <code>benchmarks/experiments/</code>.</li>
+<li>BBC demo page in <code>examples/bbc_demo/</code>.</li>
+</ul>
+<h4 id="cl-performance-fit-45x-faster-than-23-at-equal-nmi">Performance (fit 4.5x faster than 2.3 at equal NMI)</h4>
+<ul>
+<li>Iterative refinement works on the reduced embeddings instead of calling <code>UMAP.transform()</code> each iteration.</li>
+<li>Consensus clustering on graph edges (O(edges)) instead of an all-pairs co-occurrence matrix.</li>
+<li>The corpus is tokenized once; the lexical TF-IDF view is derived from the keyword counts
+  (arXiv, 55k characters per document: 44 s → 22 s).</li>
+<li>Batched keyword extraction; <code>build_hierarchy()</code> and <code>divide()</code> no longer re-tokenize per topic;
+  vectorized coherence and <code>topic_overlap_matrix()</code>; lexical kNN graph cached.</li>
+</ul>
+<h4 id="cl-fixes">Fixes</h4>
+<ul>
+<li>kNN graph on UMAP output used cosine distance; now Euclidean with a self-tuning kernel (<code>reduced_metric</code>).
+  FAISS L2 distances are square-rooted.</li>
+<li>BM25 keywords scored the first <em>n</em> corpus documents instead of the topic's documents.</li>
+<li>Metadata connected every pair of documents sharing a category (millions of edges); it now reweights
+  existing edges. String columns no longer fail with pandas 3.</li>
+<li><code>reduce_topics()</code> applied a size penalty that merged small topics into large unrelated ones
+  (2k → k: NMI 0.542 → 0.591); available as <code>size_penalty=0.3</code>.</li>
+<li><code>n_topics=k</code> and <code>divide()</code> counted clusters below <code>min_cluster_size</code> and searched a fixed range; the
+  search now widens until <em>k</em> is reachable and searches both directions.</li>
+<li>NPMI coherence used only each topic's own documents as reference and skipped bigram keywords; it now uses
+  the whole corpus. Values are not comparable with earlier versions.</li>
+<li>Tokens must start with two letters (no <code>000</code>, <code>__</code>, years as keywords).</li>
+<li><code>reduce_outliers()</code>, <code>reduce_topics()</code> and representative documents use the same unrefined embedding
+  space as the topic centroids.</li>
+</ul>
+<h4 id="cl-changed-defaults">Changed defaults</h4>
+<ul>
+<li><code>resolution</code> 1.0 → 0.3 (used for <code>n_topics=k</code> and <code>auto_resolution=False</code>).</li>
+<li><code>n_topics="auto"</code> uses the coherence-based resolution search.</li>
+</ul>
+<h3 id="cl-230-february-2026">2.3.0 (February 2026)</h3>
+<p>Cross-lingual stop words (<code>language=</code>), automatic <code>BAAI/bge-m3</code> for <code>language="multilingual"</code>, hierarchical
+topics (<code>build_hierarchy()</code>, <code>divide()</code>, <code>visualize_hierarchy_tree()</code>), per-document topics
+(<code>get_document_topics()</code>, <code>topic_overlap_matrix()</code>, <code>visualize_overlap()</code>), graph-based soft assignment,
+turftopic adapter.</p>
+<h3 id="cl-22x">2.2.x</h3>
+<p>Dimensionality reduction before graph building, soft topic probabilities, <code>reduce_outliers()</code>,
+<code>reduce_topics()</code>, <code>merge_topics()</code>, save/load of the full model state.</p></div>
+  </section>
+
+  <!-- ===================== CITE ===================== -->
+  <section class="part" id="cite">
+    <header class="part-head"><span class="eyebrow">Cite and licence</span><h2 class="part-title">Use TriTopic in your work</h2></header>
+    <div class="doc"><h3 id="cite-citation">Citation</h3>
+<pre><code class="language-bibtex">@software{tritopic2026,
+  author = {Egger, Roman},
+  title  = {TriTopic: Tri-Modal Graph Topic Modeling},
+  year   = {2026},
+  url    = {https://github.com/SmartVisions-AI/tritopic}
+}
+</code></pre>
+<h3 id="cite-license">License</h3>
+<p>MIT, see <a href="https://github.com/SmartVisions-AI/tritopic/blob/main/LICENSE">LICENSE</a>. Issues and pull requests are welcome.
+Maintained by <a href="https://www.smartvisions.at">SmartVisions</a>.</p></div>
+  </section>
+
+  <!-- ===================== COMPARISON ===================== -->
   <section class="part" id="benchmarks">
-    <header class="part-head"><span class="eyebrow">Benchmarks</span><h2 class="part-title">TriTopic vs. BERTopic</h2></header>
+    <header class="part-head"><span class="eyebrow">Comparison</span><h2 class="part-title">TriTopic and BERTopic</h2>
+      <p class="prose muted">BERTopic is the most widely used neural topic model. Both tools were run with identical embeddings on four datasets, five topic counts each, three random seeds.</p></header>
+    <div class="stats" id="cmp-numbers">
+      <div class="stat"><b>0.582</b><span>NMI against the true classes (BERTopic 0.439)</span></div>
+      <div class="stat"><b>0%</b><span>documents left without a topic (BERTopic 18.4%)</span></div>
+      <div class="stat"><b>0.262</b><span>keyword coherence, NPMI (BERTopic 0.117)</span></div>
+      <div class="stat"><b>0.014</b><span>NMI spread across random seeds (BERTopic 0.105)</span></div>
+    </div>
     <div class="doc"><p>Head-to-head with BERTopic 0.17.4 on the datasets of the original TriTopic benchmark: 20 Newsgroups (2,000
 docs), BBC News (1,225), AG News (2,000), arXiv (2,000); five topic counts per dataset plus automatic mode;
 seeds 42, 123, 456.</p>
@@ -3219,157 +3447,6 @@ python benchmarks/llm_eval.py --pkg . --out llm.csv     # LLM judgements; needs 
 </code></pre>
 <p>The decisions behind 2.4 (keyword scoring, auto resolution, ablations, LLM experiments) are documented in
 <a href="https://github.com/SmartVisions-AI/tritopic/blob/main/benchmarks/experiments/README.md"><code>benchmarks/experiments/README.md</code></a>. Release notes: <a href="#changelog">CHANGELOG.md</a>.</p></div>
-  </section>
-
-  <!-- ===================== CHANGELOG ===================== -->
-  <section class="part" id="changelog">
-    <header class="part-head"><span class="eyebrow">Changelog</span><h2 class="part-title">Release notes</h2></header>
-    <div class="doc"><h3 id="cl-260-october-2026">2.6.0 (October 2026)</h3>
-<h4 id="cl-new">New</h4>
-<ul>
-<li><strong><code>tritopic.visualization.charts</code></strong>: sixteen research charts (Plotly) — topic table, Tri-View triangle,
-  zoom ladder, topic onions, keyword barcode, constellation, fuzzy borders, group tilt, trust quadrant,
-  composition, birth timeline, codebook coverage, quote wall, LLM verdict board, coder confusion grid,
-  saturation with topic dots.</li>
-<li><strong>Structure analyses</strong> in <code>tritopic.research</code>: <code>view_composition()</code>, <code>resolution_ladder()</code>,
-  <code>topic_cores()</code>, <code>keyword_coverage()</code>, <code>coassignment()</code>, <code>topic_discovery()</code>, <code>codebook_coverage()</code>.</li>
-<li><strong>Website</strong> <code>docs/index.html</code>: how it works, user guide, all examples with code, live BBC results,
-  the chart gallery with code for every chart, technical documentation, benchmarks.</li>
-<li>Example <code>13_research_charts.py</code>; <code>docs/algorithm_visual_brief.md</code> (brief for an algorithm illustration).</li>
-</ul>
-<h4 id="cl-fixed">Fixed</h4>
-<ul>
-<li>BBC demo: topic labels in the prevalence chart were cut off; the chart now wraps long labels.</li>
-</ul>
-<h3 id="cl-251-october-2026">2.5.1 (October 2026)</h3>
-<h4 id="cl-changed">Changed</h4>
-<ul>
-<li><strong><code>topic_evolution()</code> tested on real dated news and redesigned.</strong> On HuffPost news 2012-2022 (16,400
-  articles) the 2.5.0 version, which clustered each period's part of the global graph, kept only about 5 of
-  28 edges per document and produced mostly noise (70% of period topics "born"). Each period now gets its
-  own kNN graph in the model's layout, clustered at 4× the model's resolution (<code>resolution=</code> to override),
-  and <code>link_threshold</code> defaults to 0.75. Result: the COVID pandemic (2020, continuing as vaccines in 2021)
-  and the war in Ukraine (2022) are detected as births at every tested sample size, together with events
-  such as the Flint water crisis, the Hong Kong protests and Roe v. Wade.</li>
-<li><code>TopicEvolution.nodes</code> has a <code>docs</code> column (document indices); <code>events</code> carry keywords and size;
-  mismatched timestamp counts raise an error.</li>
-<li>Example <code>12_topic_evolution_news.py</code> on real dated news.</li>
-</ul>
-<h3 id="cl-250-october-2026">2.5.0 (October 2026)</h3>
-<p>Codebook mode and a research toolkit: start from the topics you expect, and get the reliability,
-saturation, group-comparison and reporting outputs a paper needs.</p>
-<h4 id="cl-new_1">New</h4>
-<ul>
-<li><strong>Seeded topics (codebook mode)</strong>: <code>fit(documents, seeds={"name": "description" | [words]})</code>. The
-  documents that match a seed best are pinned to one Leiden community per seed (<code>is_membership_fixed</code>);
-  all other documents join a seeded topic or form emergent ones. <code>TopicInfo.seed</code>, <code>seed_topics_</code>,
-  <code>emergent_topics_</code>, <code>seed_anchors_</code>, a <code>Seed</code> column in <code>get_topic_info()</code>; <code>seed_embeddings</code> for
-  pre-computed embeddings; config <code>seed_anchors</code>, <code>seed_keyword_weight</code>. Full codebook on the dev splits:
-  NMI 0.625 → 0.661, ARI 0.515 → 0.624; held-out ARI 0.399 → 0.498.</li>
-<li><strong><code>tritopic.research</code></strong>:</li>
-<li><code>topic_reliability()</code>: bootstrap refits (default) or consensus runs; reliability and core share per
-    topic, <code>document_stability_</code> per document. Reliable topics (≥ 0.7) were 77% pure vs. 54% below 0.5.</li>
-<li><code>saturation_curve()</code> / <code>plot_saturation()</code>: exact topic accumulation curve (hypergeometric), saturation
-    points for 95% and 100% of the topics, optional refit method.</li>
-<li><code>bridge_documents()</code>, <code>topic_connections()</code>: documents and links between topics.</li>
-<li><code>topic_prevalence()</code> with Wilson or bootstrap intervals; <code>compare_groups()</code> with χ²/Fisher tests,
-    Cramér's V, odds ratios and Benjamini-Hochberg correction; <code>distinctive_keywords()</code> (log-odds with
-    informative prior).</li>
-<li><code>topic_evolution()</code> / <code>plot_evolution()</code>: per-period topics linked into births, splits, merges, deaths.</li>
-<li><code>topic_quotes()</code>: citable sentences per topic.</li>
-<li><code>methods_report()</code>: methods paragraph and parameter table from the fitted model.</li>
-<li><strong><code>TopicInterpreter.codebook()</code></strong>: codebook entries for qualitative content analysis (definition,
-  inclusion/exclusion criteria, coding notes) with real anchor quotes.</li>
-<li><strong><code>intercoder_reliability()</code></strong> (Decisions API): an LLM as independent second coder; Cohen's kappa,
-  per-topic precision/recall/F1, confusion matrix. BBC demo: kappa 0.94.</li>
-<li>Examples <code>09_seeded_topics.py</code>, <code>10_research_toolkit.py</code>, <code>11_codebook_and_second_coder.py</code>; user guide
-  <code>docs/user_guide.md</code>; BBC demo extended with all new outputs.</li>
-</ul>
-<h4 id="cl-changed_1">Changed</h4>
-<ul>
-<li><code>transform()</code> outlier threshold is calibrated on the training data by default
-  (<code>outlier_threshold=None</code> → 1st percentile of the training similarities, <code>model.outlier_threshold_</code>).
-  The fixed 0.35 rejected up to 40% of in-domain documents; the calibrated rule about 1%.</li>
-</ul>
-<h4 id="cl-fixed_1">Fixed</h4>
-<ul>
-<li><code>fit(verbose=True)</code> with automatic resolution crashed when printing the scan summary.</li>
-</ul>
-<h3 id="cl-240-october-2026">2.4.0 (October 2026)</h3>
-<p>Head-to-head with BERTopic on identical embeddings: NMI 0.582 vs. 0.439, ARI 0.440 vs. 0.285, keyword NPMI
-0.262 vs. 0.117, 0% vs. 18% outliers (4 datasets × 5 topic counts × 3 seeds). See the README benchmarks.</p>
-<h4 id="cl-new_2">New</h4>
-<ul>
-<li><strong><code>TopicInterpreter</code></strong> (<code>tritopic.labeling</code>): an LLM reads each topic (keywords, proportionally sampled
-  example documents, neighbouring topics) and returns label, description, aspects and a verdict
-  (coherent / mixed / unclear) with sub-themes. <code>refine()</code> splits mixed topics when the graph split agrees
-  with the LLM's sub-themes; <code>summarize()</code> writes an overview. OpenAI Responses API with a strict JSON
-  schema, default model <code>gpt-6-luna</code>.</li>
-<li><strong>OpenAI Decisions API integration</strong> (<code>tritopic.integrations.decisions</code>, optional): LLM word-intrusion
-  test and topic ratings, <code>assign_documents()</code>, <code>reduce_outliers(strategy="decisions")</code>, merge suggestions.</li>
-<li><strong>Automatic topic count</strong>: <code>n_topics="auto"</code> picks the Leiden resolution by keyword coherence, skipping
-  partitions dominated by one topic (<code>auto_resolution</code>, <code>resolution_range</code>, <code>auto_resolution_steps</code>,
-  <code>auto_resolution_tolerance</code>, <code>auto_resolution_max_share</code>; results in <code>resolution_</code>, <code>resolution_search_</code>).</li>
-<li><strong>Coverage-weighted c-TF-IDF</strong>: <code>IDF · √(tf_share · coverage)</code>, +45% NPMI on the dev splits.</li>
-<li>Benchmark harness <code>benchmarks/compare_bertopic.py</code>, <code>llm_eval.py</code>, <code>summarize.py</code>,
-  <code>results_to_markdown.py</code>; decision log in <code>benchmarks/experiments/</code>.</li>
-<li>BBC demo page in <code>examples/bbc_demo/</code>.</li>
-</ul>
-<h4 id="cl-performance-fit-45x-faster-than-23-at-equal-nmi">Performance (fit 4.5x faster than 2.3 at equal NMI)</h4>
-<ul>
-<li>Iterative refinement works on the reduced embeddings instead of calling <code>UMAP.transform()</code> each iteration.</li>
-<li>Consensus clustering on graph edges (O(edges)) instead of an all-pairs co-occurrence matrix.</li>
-<li>The corpus is tokenized once; the lexical TF-IDF view is derived from the keyword counts
-  (arXiv, 55k characters per document: 44 s → 22 s).</li>
-<li>Batched keyword extraction; <code>build_hierarchy()</code> and <code>divide()</code> no longer re-tokenize per topic;
-  vectorized coherence and <code>topic_overlap_matrix()</code>; lexical kNN graph cached.</li>
-</ul>
-<h4 id="cl-fixes">Fixes</h4>
-<ul>
-<li>kNN graph on UMAP output used cosine distance; now Euclidean with a self-tuning kernel (<code>reduced_metric</code>).
-  FAISS L2 distances are square-rooted.</li>
-<li>BM25 keywords scored the first <em>n</em> corpus documents instead of the topic's documents.</li>
-<li>Metadata connected every pair of documents sharing a category (millions of edges); it now reweights
-  existing edges. String columns no longer fail with pandas 3.</li>
-<li><code>reduce_topics()</code> applied a size penalty that merged small topics into large unrelated ones
-  (2k → k: NMI 0.542 → 0.591); available as <code>size_penalty=0.3</code>.</li>
-<li><code>n_topics=k</code> and <code>divide()</code> counted clusters below <code>min_cluster_size</code> and searched a fixed range; the
-  search now widens until <em>k</em> is reachable and searches both directions.</li>
-<li>NPMI coherence used only each topic's own documents as reference and skipped bigram keywords; it now uses
-  the whole corpus. Values are not comparable with earlier versions.</li>
-<li>Tokens must start with two letters (no <code>000</code>, <code>__</code>, years as keywords).</li>
-<li><code>reduce_outliers()</code>, <code>reduce_topics()</code> and representative documents use the same unrefined embedding
-  space as the topic centroids.</li>
-</ul>
-<h4 id="cl-changed-defaults">Changed defaults</h4>
-<ul>
-<li><code>resolution</code> 1.0 → 0.3 (used for <code>n_topics=k</code> and <code>auto_resolution=False</code>).</li>
-<li><code>n_topics="auto"</code> uses the coherence-based resolution search.</li>
-</ul>
-<h3 id="cl-230-february-2026">2.3.0 (February 2026)</h3>
-<p>Cross-lingual stop words (<code>language=</code>), automatic <code>BAAI/bge-m3</code> for <code>language="multilingual"</code>, hierarchical
-topics (<code>build_hierarchy()</code>, <code>divide()</code>, <code>visualize_hierarchy_tree()</code>), per-document topics
-(<code>get_document_topics()</code>, <code>topic_overlap_matrix()</code>, <code>visualize_overlap()</code>), graph-based soft assignment,
-turftopic adapter.</p>
-<h3 id="cl-22x">2.2.x</h3>
-<p>Dimensionality reduction before graph building, soft topic probabilities, <code>reduce_outliers()</code>,
-<code>reduce_topics()</code>, <code>merge_topics()</code>, save/load of the full model state.</p></div>
-  </section>
-
-  <!-- ===================== CITE ===================== -->
-  <section class="part" id="cite">
-    <header class="part-head"><span class="eyebrow">Cite and licence</span><h2 class="part-title">Use TriTopic in your work</h2></header>
-    <div class="doc"><h3 id="cite-citation">Citation</h3>
-<pre><code class="language-bibtex">@software{tritopic2026,
-  author = {Egger, Roman},
-  title  = {TriTopic: Tri-Modal Graph Topic Modeling},
-  year   = {2026},
-  url    = {https://github.com/SmartVisions-AI/tritopic}
-}
-</code></pre>
-<h3 id="cite-license">License</h3>
-<p>MIT, see <a href="https://github.com/SmartVisions-AI/tritopic/blob/main/LICENSE">LICENSE</a>. Issues and pull requests are welcome.
-Maintained by <a href="https://www.smartvisions.at">SmartVisions</a>.</p></div>
   </section>
 
   </div></main>
@@ -4073,10 +4150,15 @@ Maintained by <a href="https://www.smartvisions.at">SmartVisions</a>.</p></div>
   side.addEventListener("click", e => { if (e.target.closest("a") && matchMedia("(max-width: 960px)").matches) { side.classList.remove("open"); btn.setAttribute("aria-expanded", "false"); } });
   const links = [...document.querySelectorAll("nav.menu a.part-link")];
   if ("IntersectionObserver" in window) {
-    const io = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) links.forEach(a => a.setAttribute("aria-current", a.getAttribute("href") === "#" + e.target.id)); }),
+    const io = new IntersectionObserver(es => es.forEach(e => { if (!e.isIntersecting) return;
+        links.forEach(a => a.setAttribute("aria-current", a.getAttribute("href") === "#" + e.target.id)); }),
       { rootMargin: "-30% 0px -60% 0px" });
     document.querySelectorAll("section.part").forEach(s => io.observe(s));
   }
+  const groups = [...document.querySelectorAll("nav.menu details.grp")];
+  groups.forEach(g => g.querySelector(".chev").addEventListener("click", e => { e.preventDefault(); g.open = !g.open; g.dataset.user = "1"; }));
+  document.getElementById("expandall").addEventListener("click", () => groups.forEach(g => { g.open = true; g.dataset.user = "1"; }));
+  document.getElementById("collapseall").addEventListener("click", () => groups.forEach(g => { g.open = false; g.dataset.user = "1"; }));
   if (window.hljs) document.querySelectorAll("pre code").forEach(c => { try { hljs.highlightElement(c); } catch (e) {} });
 })();
 </script>
