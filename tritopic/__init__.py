@@ -24,7 +24,7 @@ Author: Roman Egger
 License: MIT
 """
 
-__version__ = "2.5.1"
+__version__ = "2.6.0"
 __author__ = "Roman Egger"
 
 from tritopic.core.model import TriTopic, TriTopicConfig, TopicInfo

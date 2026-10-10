@@ -1,5 +1,23 @@
 # Changelog
 
+## 2.6.0 (October 2026)
+
+### New
+
+- **`tritopic.visualization.charts`**: sixteen research charts (Plotly) — topic table, Tri-View triangle,
+  zoom ladder, topic onions, keyword barcode, constellation, fuzzy borders, group tilt, trust quadrant,
+  composition, birth timeline, codebook coverage, quote wall, LLM verdict board, coder confusion grid,
+  saturation with topic dots.
+- **Structure analyses** in `tritopic.research`: `view_composition()`, `resolution_ladder()`,
+  `topic_cores()`, `keyword_coverage()`, `coassignment()`, `topic_discovery()`, `codebook_coverage()`.
+- **Website** `docs/index.html`: how it works, user guide, all examples with code, live BBC results,
+  the chart gallery with code for every chart, technical documentation, benchmarks.
+- Example `13_research_charts.py`; `docs/algorithm_visual_brief.md` (brief for an algorithm illustration).
+
+### Fixed
+
+- BBC demo: topic labels in the prevalence chart were cut off; the chart now wraps long labels.
+
 ## 2.5.1 (October 2026)
 
 ### Changed

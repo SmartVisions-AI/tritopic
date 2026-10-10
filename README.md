@@ -36,7 +36,10 @@ ahead are in [Benchmarks](#benchmarks).
 (source: [`examples/bbc_demo/index.html`](examples/bbc_demo/index.html)): six runs against BERTopic, LLM
 interpretation, codebook seeds and every research output.
 
-**Learn it:** [user guide with code for every task](docs/user_guide.md) · [12 runnable examples](examples/) ·
+**Website:** [everything on one page: how it works, guide, examples, live results, 16 charts](https://htmlpreview.github.io/?https://github.com/SmartVisions-AI/tritopic/blob/main/docs/index.html)
+(source: [`docs/index.html`](docs/index.html)).
+
+**Learn it:** [user guide with code for every task](docs/user_guide.md) · [13 runnable examples](examples/) ·
 [technical documentation](docs/docs.md)
 
 ---
@@ -63,7 +66,7 @@ interpretation, codebook seeds and every research output.
 ## Installation
 
 ```bash
-pip install git+https://github.com/SmartVisions-AI/tritopic.git        # 2.5.1 (this repository)
+pip install git+https://github.com/SmartVisions-AI/tritopic.git        # 2.6.0 (this repository)
 pip install tritopic                                                    # latest PyPI release (2.3.0)
 ```
 
@@ -121,6 +124,7 @@ The [user guide](docs/user_guide.md) walks through every task with code. Each st
 | [`10_research_toolkit.py`](examples/10_research_toolkit.py) | Reliability, saturation, bridges, prevalence, group tests, evolution, quotes, methods text |
 | [`11_codebook_and_second_coder.py`](examples/11_codebook_and_second_coder.py) | Coding scheme with anchor quotes, LLM second coder (kappa) |
 | [`12_topic_evolution_news.py`](examples/12_topic_evolution_news.py) | Topic births and deaths in 11 years of real news (HuffPost 2012-2022) |
+| [`13_research_charts.py`](examples/13_research_charts.py) | All sixteen research charts as interactive HTML files |
 
 ## Let an LLM interpret the topics
 
@@ -222,6 +226,25 @@ intercoder_reliability(model, client)    # LLM: second coder, Cohen's kappa and 
 | Methods paragraph | Reproducible description of the analysis for the paper | — |
 
 Details: [user guide §11-12](docs/user_guide.md#11-research-toolkit), [technical documentation §19](docs/docs.md#19-research-toolkit).
+
+### Research charts
+
+Sixteen Plotly charts in `tritopic.visualization.charts`, seven of them new chart types that only work
+with TriTopic's data: the **Tri-View triangle** (is a topic held together by meaning, wording or both?),
+the **zoom ladder** (how topics split across resolutions), **topic onions** (core and edge, stability,
+bridges), the **keyword barcode**, the **birth timeline**, **codebook coverage** and **saturation with
+topic dots**.
+
+```python
+from tritopic.visualization import charts
+
+charts.plot_triview(model).show()
+charts.plot_resolution_ladder(model).show()
+charts.plot_trust(model, topic_reliability(model)).show()
+```
+
+All sixteen with live examples: [website, chart gallery](https://htmlpreview.github.io/?https://github.com/SmartVisions-AI/tritopic/blob/main/docs/index.html#charts);
+reference: [user guide §14](docs/user_guide.md#14-research-charts).
 
 ## How it works
 

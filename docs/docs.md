@@ -1,4 +1,4 @@
-# TriTopic 2.5 — Technical Documentation
+# TriTopic 2.6 — Technical Documentation
 
 How TriTopic works, why it is built this way, and how to use every part of it. For a quick start see the
 [README](../README.md), for task-by-task code the [user guide](user_guide.md); for release notes the [CHANGELOG](../CHANGELOG.md).
@@ -24,6 +24,7 @@ How TriTopic works, why it is built this way, and how to use every part of it. F
 17. [Performance](#17-performance)
 18. [Seeded topics (codebook mode)](#18-seeded-topics-codebook-mode)
 19. [Research toolkit](#19-research-toolkit)
+20. [Research charts](#20-research-charts)
 
 ---
 
@@ -406,3 +407,40 @@ LLM unless marked.
 | `methods_report(model, corpus="the corpus", fmt="markdown")` | text | Methods paragraph and parameter table written from the fitted model (embedding model, views, resolution choice, quality metrics, software versions). Reproducible, no LLM. |
 | `TopicInterpreter.codebook(model, n_quotes=3)` (LLM) | `topic, size, name, definition, inclusion, exclusion, coding_notes, anchor_examples` | One codebook entry per topic for qualitative content analysis (Mayring); exclusion criteria name the neighbouring category; anchors are real quotes. Stored as `model.codebook_`. |
 | `intercoder_reliability(model, client)` (LLM) | `IntercoderResult` | See §13. BBC demo: kappa 0.94 on 150 articles. |
+
+### Structure analyses (new in 2.6)
+
+| Function | Returns | How |
+|---|---|---|
+| `view_composition(model)` | per topic and document: links `sem_only`, `lex_only`, `both` and shares | Semantic kNN graph on the unrefined embeddings vs. lexical mutual-kNN graph, restricted to links inside each topic. |
+| `resolution_ladder(model, multipliers=(0.25, 0.5, 1, 3, 9))` | `ResolutionLadder(levels, flows, labels)` | Consensus Leiden on the fitted graph at multiples of `resolution_`; flows = document counts between clusters of consecutive levels. |
+| `topic_cores(model)` | `core_rank, similarity, angle, stability, bridge_to, bridge_share` per document | Rank of cosine similarity to the topic centroid; angle from the topic's first two principal components. |
+| `keyword_coverage(model, topic_id=None)` | `coverage`, `outside`, `presence` per keyword | Document presence from the shared count matrix, documents ordered core → edge. |
+| `coassignment(model, sample_size=240, n_refits=10)` | `CoassignmentResult(matrix, docs, topics, n_refits)` | Refits on 80% samples with the same settings and topic count; share of refits that keep two documents together (over refits containing both). |
+| `topic_discovery(model)` | per topic `f50`, `f95`; accumulation curve | Hypergeometric probability that ≥ `min_cluster_size` documents of a topic are in a random fraction of the corpus. |
+| `codebook_coverage(model)` | size, share and seed per topic | From `TopicInfo.seed`. |
+
+## 20. Research charts
+
+`tritopic.visualization.charts` draws every analysis above as a Plotly figure. Topics are coloured by size
+rank with a fixed eight-colour palette (further topics grey), so colours stay the same across charts.
+
+| Function | Chart | Data behind it |
+|---|---|---|
+| `plot_topic_table(model, reliability=rel)` | Periodic table of topics: symbol, size, share, reliability, NPMI | `get_topic_info()`, `topic_reliability()` |
+| `plot_triview(model)` | Tri-View triangle: links inside each topic by view (meaning only / wording only / both) | `view_composition()` |
+| `plot_resolution_ladder(model)` | Zoom ladder: Sankey of the clusters at five resolutions | `resolution_ladder()` |
+| `plot_topic_onions(model)` | Core and edge of every topic, coloured by stability, bridges ringed | `topic_cores()` |
+| `plot_keyword_barcode(model, topic_id)` | Which documents (core → edge) contain each keyword | `keyword_coverage()` |
+| `plot_constellation(model)` | Topic network: similarity layout, links with bridge counts | `topic_connections()` |
+| `plot_coassignment(model)` | Fuzzy borders: how often two documents share a topic across refits | `coassignment()` |
+| `plot_group_tilt(model, groups)` | Topic shares per group with CIs, Cramér's V, significance | `topic_prevalence()`, `compare_groups()` |
+| `plot_trust(model, rel)` | Size against reliability with the 0.7 / 0.5 guides | `topic_reliability()` |
+| `plot_composition(model, reference)` | Reference categories inside each topic | labels you supply |
+| `plot_birth_timeline(evolution)` | New and ending topics per period | `topic_evolution()` |
+| `plot_codebook_coverage({name: model})` | Seeded vs. emerged share of the corpus | `codebook_coverage()` |
+| `plot_quote_wall(model)` | The most telling sentence per topic | `topic_quotes()` |
+| `plot_verdict_board(results, refine_log)` | LLM verdicts (coherent / mixed / unclear) with evidence | `TopicInterpreter.interpret()` |
+| `plot_coder_confusion(ic, model)` | Where the LLM second coder disagrees | `intercoder_reliability()` |
+| `plot_topic_discovery(model)` | Saturation curve plus when each topic becomes visible | `topic_discovery()` |
+

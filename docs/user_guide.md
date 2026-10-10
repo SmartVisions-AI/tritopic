@@ -18,8 +18,9 @@ Task-by-task instructions with code. Every snippet comes from a runnable script 
 11. [Research toolkit](#11-research-toolkit)
 12. [Codebook and second coder for manual coding](#12-codebook-and-second-coder-for-manual-coding)
 13. [Evaluation and visualization](#13-evaluation-and-visualization)
-14. [Configuration recipes](#14-configuration-recipes)
-15. [FAQ and troubleshooting](#15-faq-and-troubleshooting)
+14. [Research charts](#14-research-charts)
+15. [Configuration recipes](#15-configuration-recipes)
+16. [FAQ and troubleshooting](#16-faq-and-troubleshooting)
 
 ---
 
@@ -362,7 +363,50 @@ model.visualize_hierarchy_tree()        # after build_hierarchy()
 
 All visualizations return Plotly figures (`.show()`, `.write_html()`).
 
-## 14. Configuration recipes
+## 14. Research charts
+
+Script: [`examples/13_research_charts.py`](../examples/13_research_charts.py)
+
+Sixteen Plotly charts for analysing and presenting a model. Each returns a figure (`.show()`,
+`.write_html()`); the numbers behind it come from `tritopic.research`, so you can also report them as tables.
+
+```python
+from tritopic.research import topic_reliability
+from tritopic.visualization import charts
+
+rel = topic_reliability(model)
+charts.plot_topic_table(model, reliability=rel).show()     # overview tiles
+charts.plot_triview(model).show()                          # what holds each topic together
+charts.plot_resolution_ladder(model).show()                # how topics split when you zoom in
+charts.plot_topic_onions(model).show()                     # core and edge, stability, bridges
+charts.plot_keyword_barcode(model, topic_id=0).show()      # is a keyword carried by the whole topic?
+charts.plot_trust(model, rel).show()                       # which topics can go into the paper
+```
+
+| Function | Chart | Data behind it |
+|---|---|---|
+| `plot_topic_table(model, reliability=rel)` | Periodic table of topics: symbol, size, share, reliability, NPMI | `get_topic_info()`, `topic_reliability()` |
+| `plot_triview(model)` | Tri-View triangle: links inside each topic by view (meaning only / wording only / both) | `view_composition()` |
+| `plot_resolution_ladder(model)` | Zoom ladder: Sankey of the clusters at five resolutions | `resolution_ladder()` |
+| `plot_topic_onions(model)` | Core and edge of every topic, coloured by stability, bridges ringed | `topic_cores()` |
+| `plot_keyword_barcode(model, topic_id)` | Which documents (core → edge) contain each keyword | `keyword_coverage()` |
+| `plot_constellation(model)` | Topic network: similarity layout, links with bridge counts | `topic_connections()` |
+| `plot_coassignment(model)` | Fuzzy borders: how often two documents share a topic across refits | `coassignment()` |
+| `plot_group_tilt(model, groups)` | Topic shares per group with CIs, Cramér's V, significance | `topic_prevalence()`, `compare_groups()` |
+| `plot_trust(model, rel)` | Size against reliability with the 0.7 / 0.5 guides | `topic_reliability()` |
+| `plot_composition(model, reference)` | Reference categories inside each topic | labels you supply |
+| `plot_birth_timeline(evolution)` | New and ending topics per period | `topic_evolution()` |
+| `plot_codebook_coverage({name: model})` | Seeded vs. emerged share of the corpus | `codebook_coverage()` |
+| `plot_quote_wall(model)` | The most telling sentence per topic | `topic_quotes()` |
+| `plot_verdict_board(results, refine_log)` | LLM verdicts (coherent / mixed / unclear) with evidence | `TopicInterpreter.interpret()` |
+| `plot_coder_confusion(ic, model)` | Where the LLM second coder disagrees | `intercoder_reliability()` |
+| `plot_topic_discovery(model)` | Saturation curve plus when each topic becomes visible | `topic_discovery()` |
+
+Seven of these chart types are new: the Tri-View triangle, the zoom ladder, topic onions, the keyword
+barcode, the birth timeline, codebook coverage and saturation with topic dots. They need what only
+TriTopic has: two graph views, consensus and bootstrap refits, seeds and topic evolution.
+
+## 15. Configuration recipes
 
 ```python
 from tritopic import TriTopicConfig
@@ -385,7 +429,7 @@ TriTopicConfig(random_state=42)
 
 All parameters with defaults: [technical documentation §15](docs.md#15-configuration-reference).
 
-## 15. FAQ and troubleshooting
+## 16. FAQ and troubleshooting
 
 **The first fit is slow.** The embedding model is downloaded and the documents are encoded once; with
 pre-computed embeddings a fit of 2,000 documents takes about 7-10 s. UMAP compiles with numba on first use.

@@ -149,6 +149,16 @@ footer { border-top: 1px solid var(--line); padding-top: 20px; font-size: 0.82re
 .rel-row { display: grid; grid-template-columns: minmax(0, 1fr) 140px 52px; gap: 10px; align-items: center; font-size: 0.86rem; }
 .rel-bar { height: 8px; border-radius: 4px; background: var(--chip); overflow: hidden; }
 .rel-bar i { display: block; height: 100%; border-radius: 4px; }
+.pv { display: grid; gap: 4px; }
+.pv-row { display: grid; grid-template-columns: minmax(0, 11rem) minmax(80px, 1fr) 3rem; gap: 10px; align-items: center; font-size: 0.84rem; }
+.pv-label { line-height: 1.25; }
+.pv-track { position: relative; height: 22px; }
+.pv-grid { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--line); }
+.pv-ci { position: absolute; top: 10px; height: 2px; background: var(--petrol); }
+.pv-dot { position: absolute; top: 5px; width: 12px; height: 12px; margin-left: -6px; border-radius: 50%; background: var(--petrol); border: 2px solid var(--surface); box-sizing: border-box; }
+.pv-val { text-align: right; font-variant-numeric: tabular-nums; color: var(--ink-2); }
+.pv-axis .pv-track { height: 16px; }
+.pv-axis b { position: absolute; transform: translateX(-50%); font-weight: 400; font-size: 0.75rem; color: var(--ink-2); }
 .seed-row { grid-template-columns: minmax(0, 1fr) auto; }
 .num { font-variant-numeric: tabular-nums; text-align: right; }
 .big { font-family: var(--display); font-size: 2.6rem; font-weight: 800; line-height: 1; color: var(--ink); }
@@ -271,7 +281,7 @@ footer { border-top: 1px solid var(--line); padding-top: 20px; font-size: 0.82re
     <h2>Where topics meet, and how big they are</h2>
     <div class="cols2">
       <div class="panel"><h3>Bridge articles</h3><p class="desc">Articles whose nearest neighbours lie mostly in another topic: hybrid cases that show how two themes connect.</p><div class="rowlist" id="bridges"></div></div>
-      <div class="panel"><h3>Share of articles per topic, 95% confidence interval</h3><svg id="prevchart" viewBox="0 0 420 300" role="img" aria-label="Topic prevalence with confidence intervals"></svg></div>
+      <div class="panel"><h3>Share of articles per topic, 95% confidence interval</h3><div id="prevchart" class="pv" role="img" aria-label="Topic prevalence with confidence intervals"></div></div>
     </div>
   </section>
 
@@ -541,19 +551,19 @@ footer { border-top: 1px solid var(--line); padding-top: 20px; font-size: 0.82re
     <div><p class="desc"><b>${esc(b.topic_label)}</b> ↔ <b>${esc(b.other_label)}</b> · ${pct(b.bridge_score)} of its neighbours in the other topic</p>
     <p class="example">${esc(b.text)}…</p></div>`).join("");
 
-  // prevalence chart
+  // prevalence chart: HTML rows so long labels wrap instead of being clipped
   (function () {
-    const P = RS.prevalence.slice().sort((a, b) => b.share - a.share), svg = document.getElementById("prevchart");
-    const W = 420, rowH = 32, Lm = 170, Rm = 20, T = 10, H = T + P.length * rowH + 30;
-    svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
-    const max = Math.ceil(Math.max(...P.map(p => p.ci_high)) * 10) / 10, X = v => Lm + v / max * (W - Lm - Rm);
-    let g = "";
-    for (let v = 0; v <= max + 1e-9; v += 0.1) g += `<line x1="${X(v)}" x2="${X(v)}" y1="${T}" y2="${H - 26}" stroke="var(--line)"/><text x="${X(v)}" y="${H - 10}" text-anchor="middle">${Math.round(v * 100)}%</text>`;
-    P.forEach((p, i) => { const y = T + i * rowH + rowH / 2;
-      g += `<text x="${Lm - 8}" y="${y + 4}" text-anchor="end">${esc((p.label || "Topic " + p.topic).slice(0, 26))}</text>`;
-      g += `<line x1="${X(p.ci_low)}" x2="${X(p.ci_high)}" y1="${y}" y2="${y}" stroke="var(--petrol)" stroke-width="2"/>`;
-      g += `<circle cx="${X(p.share)}" cy="${y}" r="5" fill="var(--petrol)" stroke="var(--surface)" stroke-width="2"/>`; });
-    svg.innerHTML = g;
+    const P = RS.prevalence.slice().sort((a, b) => b.share - a.share), box = document.getElementById("prevchart");
+    const max = Math.ceil(Math.max(...P.map(p => p.ci_high)) * 10) / 10, X = v => (v / max * 100).toFixed(2) + "%";
+    const ticks = []; for (let v = 0; v <= max + 1e-9; v += 0.1) ticks.push(v);
+    const grid = ticks.map(v => `<i class="pv-grid" style="left:${X(v)}"></i>`).join("");
+    box.innerHTML = P.map(p => `
+      <div class="pv-row"><span class="pv-label">${esc(p.label || "Topic " + p.topic)}</span>
+        <span class="pv-track" title="${pct(p.share)} (95% CI ${pct(p.ci_low)}–${pct(p.ci_high)})">${grid}
+          <i class="pv-ci" style="left:${X(p.ci_low)};width:calc(${X(p.ci_high)} - ${X(p.ci_low)})"></i>
+          <i class="pv-dot" style="left:${X(p.share)}"></i></span>
+        <span class="pv-val">${pct(p.share)}</span></div>`).join("") +
+      `<div class="pv-row pv-axis"><span></span><span class="pv-track">${ticks.map(v => `<b style="left:${X(v)}">${Math.round(v * 100)}%</b>`).join("")}</span><span></span></div>`;
   })();
 
   // groups
