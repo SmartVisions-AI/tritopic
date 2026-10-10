@@ -4,12 +4,19 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
-[![Tests](https://img.shields.io/badge/tests-118%20passed-brightgreen.svg)](tests/)
+[![Tests](https://img.shields.io/badge/tests-133%20passed-brightgreen.svg)](tests/)
 
 TriTopic builds one graph over your documents from three views (sentence embeddings, TF-IDF wording and
 optional metadata), finds topics with consensus Leiden clustering, and describes them with keywords that are
 both frequent and spread across the topic. An optional LLM step labels each topic, explains it, and splits
 topics that turn out to mix unrelated themes.
+
+**New in 2.5: built for research.** Start from the categories you expect and let the rest emerge
+([codebook mode](#start-from-a-codebook-seeded-topics)). Then get what a paper needs and no other topic
+model gives you ([research toolkit](#research-toolkit)): reliability per topic, a saturation curve
+("have we seen every topic?"), bridge documents, prevalence with confidence intervals, group comparisons
+with significance tests, topic births and splits over time, citable quotes, a coding scheme for manual
+coding, an LLM second coder with Cohen's kappa, and a ready-made methods paragraph.
 
 In a head-to-head benchmark with **identical embeddings**, TriTopic 2.4 beats BERTopic on every quality measure:
 
@@ -26,7 +33,11 @@ TriTopic has the better NMI in 18 of 20 dataset/k settings. Methodology and the 
 ahead are in [Benchmarks](#benchmarks).
 
 **See it on real data:** [interactive demo on 1,000 BBC articles](https://htmlpreview.github.io/?https://github.com/SmartVisions-AI/tritopic/blob/main/examples/bbc_demo/index.html)
-(source: [`examples/bbc_demo/index.html`](examples/bbc_demo/index.html)).
+(source: [`examples/bbc_demo/index.html`](examples/bbc_demo/index.html)): six runs against BERTopic, LLM
+interpretation, codebook seeds and every research output.
+
+**Learn it:** [user guide with code for every task](docs/user_guide.md) · [11 runnable examples](examples/) ·
+[technical documentation](docs/docs.md)
 
 ---
 
@@ -34,7 +45,10 @@ ahead are in [Benchmarks](#benchmarks).
 
 - [Installation](#installation)
 - [Quick start](#quick-start)
+- [Examples and user guide](#examples-and-user-guide)
 - [Let an LLM interpret the topics](#let-an-llm-interpret-the-topics)
+- [Start from a codebook (seeded topics)](#start-from-a-codebook-seeded-topics)
+- [Research toolkit](#research-toolkit)
 - [How it works](#how-it-works)
 - [Choosing the number of topics](#choosing-the-number-of-topics)
 - [Working with a fitted model](#working-with-a-fitted-model)
@@ -49,7 +63,7 @@ ahead are in [Benchmarks](#benchmarks).
 ## Installation
 
 ```bash
-pip install git+https://github.com/SmartVisions-AI/tritopic.git        # 2.4 (this repository)
+pip install git+https://github.com/SmartVisions-AI/tritopic.git        # 2.5 (this repository)
 pip install tritopic                                                    # latest PyPI release (2.3.0)
 ```
 
@@ -89,6 +103,24 @@ model = TriTopic(n_topics=10, language="german", embedding_model="BAAI/bge-m3")
 model.fit(documents, embeddings=my_embeddings)
 ```
 
+## Examples and user guide
+
+The [user guide](docs/user_guide.md) walks through every task with code. Each step has a runnable script:
+
+| Script | What it shows |
+|---|---|
+| [`01_quickstart.py`](examples/01_quickstart.py) | Fit, inspect topics, visualize |
+| [`02_your_own_data.py`](examples/02_your_own_data.py) | CSV in, cleaning, own embeddings, results back to the table |
+| [`03_shape_the_topics.py`](examples/03_shape_the_topics.py) | Topic count, outliers, merge, split, hierarchy |
+| [`04_new_documents_and_saving.py`](examples/04_new_documents_and_saving.py) | `transform()`, probabilities, save/load |
+| [`05_metadata_time_and_languages.py`](examples/05_metadata_time_and_languages.py) | Metadata view, topics over time, other languages |
+| [`06_llm_interpretation.py`](examples/06_llm_interpretation.py) | `TopicInterpreter`: labels, mixed-topic detection, `refine()` |
+| [`07_decisions_api.py`](examples/07_decisions_api.py) | LLM ratings, word intrusion, document assignment, merges |
+| [`08_evaluate_and_visualize.py`](examples/08_evaluate_and_visualize.py) | Metrics, NMI/ARI, all plots |
+| [`09_seeded_topics.py`](examples/09_seeded_topics.py) | Codebook mode: seeded and emergent topics |
+| [`10_research_toolkit.py`](examples/10_research_toolkit.py) | Reliability, saturation, bridges, prevalence, group tests, evolution, quotes, methods text |
+| [`11_codebook_and_second_coder.py`](examples/11_codebook_and_second_coder.py) | Coding scheme with anchor quotes, LLM second coder (kappa) |
+
 ## Let an LLM interpret the topics
 
 `TopicInterpreter` lets an LLM read every topic the way an analyst would. For each topic it gets the ranked
@@ -127,6 +159,68 @@ News". The default model was chosen on development data:
 On held-out data, `refine()` raised NMI from 0.606 to 0.639; no dataset lost more than 0.001. An
 interpretation uses about 1,500 input tokens per topic. `LLMLabeler` (label and description only, Anthropic
 or OpenAI) remains available via `model.generate_labels(LLMLabeler(...))`.
+
+## Start from a codebook (seeded topics)
+
+Most topic models make you choose between deductive coding (you define the categories) and inductive
+discovery (the algorithm does). TriTopic does both in one fit: describe the topics you expect, and it pins
+the documents that match each description best to one topic. All other documents can join a seeded topic
+or form **new topics nobody asked for**.
+
+```python
+seeds = {
+    "Technology": "Technology news: computers, mobile phones, the internet, software and gadgets",
+    "Sport": "Sport news: football, rugby, tennis, athletics, matches and players",
+    "Politics": ["government", "election", "minister", "parliament"],      # word lists work too
+}
+model = TriTopic().fit(documents, seeds=seeds)
+
+model.get_topic_info()[["Topic", "Seed", "Size", "Keywords"]]
+model.seed_topics_        # {"Technology": 0, "Sport": 1, "Politics": 2}
+model.emergent_topics_    # ids of the topics that emerged on their own
+```
+
+Seeds are fixed memberships inside every Leiden run, so the graph still decides where all other documents
+go. Results: full codebook on the dev splits ARI 0.515 → 0.624, held-out 0.399 → 0.498; in the BBC demo
+five one-line seeds raise NMI from 0.742 to 0.801 and ARI from 0.631 to 0.800. A seed that fits no document
+is reported, so you also learn which codebook categories are missing from the data. Seed every theme you
+know: with a partial codebook a seeded topic can absorb a neighbouring unseeded theme.
+
+## Research toolkit
+
+`tritopic.research` answers the questions reviewers ask about a topic model. Nothing here needs an LLM
+unless marked.
+
+```python
+from tritopic.research import (topic_reliability, saturation_curve, bridge_documents, topic_connections,
+                               topic_prevalence, compare_groups, distinctive_keywords, topic_evolution,
+                               topic_quotes, methods_report)
+
+topic_reliability(model)                 # does each topic survive refitting on 80% samples? (0-1)
+saturation_curve(model)                  # with how much data does every topic appear?
+bridge_documents(model)                  # documents that connect two topics
+topic_prevalence(model)                  # share per topic with 95% confidence interval
+compare_groups(model, df["country"])     # chi2 / Fisher per topic, Cramér's V, BH-corrected p
+distinctive_keywords(model, df["country"], "AT", "DE")   # words that separate two groups
+topic_evolution(model, df["date"], freq="Q").events       # births, splits, merges, deaths over time
+topic_quotes(model, n=3)                 # citable sentences per topic
+print(methods_report(model, corpus="12,400 hotel reviews"))   # methods paragraph + parameter table
+
+interpreter.codebook(model)              # LLM: coding scheme with definitions and real anchor quotes
+intercoder_reliability(model, client)    # LLM: second coder, Cohen's kappa and F1 per topic
+```
+
+| Output | What makes it new | Validation |
+|---|---|---|
+| Topic reliability | Per-topic stability under resampling instead of one global score | Topics ≥ 0.7 were 77% pure, < 0.5 only 54% (4 corpora) |
+| Saturation curve | The qualitative-research question "have we seen every theme?" answered exactly (topic accumulation curve) | 95% of topics visible after 25-35% of the data, all after 45-65% |
+| Bridge documents | Hybrid cases between topics, from the graph | — |
+| Group comparison | Significance tests and effect sizes per topic, corrected for multiple testing | — |
+| Topic evolution | How topic *content* splits and merges over time, not just frequency | — |
+| Codebook + second coder | From topics to a coding scheme for manual content analysis, with inter-coder agreement | BBC demo: kappa 0.94 |
+| Methods paragraph | Reproducible description of the analysis for the paper | — |
+
+Details: [user guide §11-12](docs/user_guide.md#11-research-toolkit), [technical documentation §19](docs/docs.md#19-research-toolkit).
 
 ## How it works
 
@@ -177,7 +271,7 @@ model.get_topic(3).keywords                   # TopicInfo: keywords, scores, siz
 model.probabilities_                          # soft assignments (n_docs × n_topics)
 model.get_document_topics(doc_idx=0, top_n=3)
 
-model.transform(new_documents)                # assign new documents (nearest topic centroid)
+model.transform(new_documents)                # assign new documents (nearest centroid; threshold calibrated on the training data)
 model.transform_proba(new_documents)
 
 model.reduce_outliers(strategy="neighbors")   # or "embeddings", or "decisions" (LLM, see below)
@@ -205,7 +299,8 @@ A [turftopic](https://github.com/x-tabdeveloping/turftopic) adapter is available
 
 ```python
 from tritopic.integrations.decisions import (
-    DecisionsClient, word_intrusion, rate_topics, assign_documents, suggest_merges, apply_merges)
+    DecisionsClient, word_intrusion, rate_topics, assign_documents, suggest_merges, apply_merges,
+    intercoder_reliability)
 
 client = DecisionsClient()                              # OPENAI_API_KEY; model gpt-6-luna
 keywords = [t.keywords for t in model.topics_ if t.topic_id != -1]
@@ -214,6 +309,7 @@ rate_topics(keywords, client)                           # 0-3 per topic
 assign_documents(model, new_documents, client)          # LLM assignment to topics
 model.reduce_outliers(strategy="decisions", decisions_client=client)
 apply_merges(model, suggest_merges(model, client))      # merge pairs the LLM considers the same theme
+intercoder_reliability(model, client).kappa             # LLM as second coder (Cohen's kappa)
 ```
 
 On the benchmark data the LLM rates TriTopic's topics 2.21 vs. 1.94 for tuned BERTopic. LLM assignment of

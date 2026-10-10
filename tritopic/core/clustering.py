@@ -51,12 +51,14 @@ class ConsensusLeiden:
         self.labels_: np.ndarray | None = None
         self.stability_score_: float | None = None
         self._all_partitions: list[np.ndarray] = []
+        self._anchors: np.ndarray | None = None
     
     def fit_predict(
         self,
         graph: "igraph.Graph",
         min_cluster_size: int = 5,
         resolution: float | None = None,
+        anchors: np.ndarray | None = None,
     ) -> np.ndarray:
         """
         Fit Leiden clustering with consensus.
@@ -69,6 +71,11 @@ class ConsensusLeiden:
             Minimum cluster size. Smaller clusters become outliers.
         resolution : float, optional
             Override default resolution.
+        anchors : np.ndarray, optional
+            Seed index per node (-1 = free).  Nodes with the same seed index
+            start in one community and are never moved (Leiden
+            ``is_membership_fixed``); all other nodes may join a seeded
+            community or form new ones.  Used for seeded topic modeling.
 
         Returns
         -------
@@ -76,6 +83,7 @@ class ConsensusLeiden:
             Cluster assignments. -1 for outliers.
         """
         res = self.resolution if resolution is None else resolution
+        self._anchors = None if anchors is None or not np.any(np.asarray(anchors) >= 0) else np.asarray(anchors)
 
         self._all_partitions = self._run_leiden(graph, res, self.n_runs)
 
@@ -97,8 +105,27 @@ class ConsensusLeiden:
         n_runs: int,
         weights: str = "weight",
     ) -> list[np.ndarray]:
-        """Run Leiden *n_runs* times with consecutive seeds."""
+        """Run Leiden *n_runs* times with consecutive seeds (anchored if set)."""
         import leidenalg as la
+
+        if self._anchors is not None:
+            anchors = self._anchors
+            n_seeds = int(anchors.max()) + 1
+            free = anchors < 0
+            initial = anchors.copy()
+            initial[free] = n_seeds + np.arange(int(free.sum()))   # ids must stay below n_nodes
+            initial = initial.tolist()
+            fixed = (anchors >= 0).tolist()
+            out = []
+            for run in range(n_runs):
+                part = la.RBConfigurationVertexPartition(
+                    graph, initial_membership=initial, weights=weights, resolution_parameter=resolution,
+                )
+                opt = la.Optimiser()
+                opt.set_rng_seed(self.random_state + run)
+                opt.optimise_partition(part, n_iterations=2, is_membership_fixed=fixed)
+                out.append(np.array(part.membership))
+            return out
 
         return [
             np.array(

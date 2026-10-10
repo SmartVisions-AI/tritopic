@@ -1,7 +1,7 @@
-# TriTopic 2.4 — Technical Documentation
+# TriTopic 2.5 — Technical Documentation
 
 How TriTopic works, why it is built this way, and how to use every part of it. For a quick start see the
-[README](../README.md); for release notes the [CHANGELOG](../CHANGELOG.md).
+[README](../README.md), for task-by-task code the [user guide](user_guide.md); for release notes the [CHANGELOG](../CHANGELOG.md).
 
 ## Contents
 
@@ -22,6 +22,8 @@ How TriTopic works, why it is built this way, and how to use every part of it. F
 15. [Configuration reference](#15-configuration-reference)
 16. [Design decisions and the evidence behind them](#16-design-decisions-and-the-evidence-behind-them)
 17. [Performance](#17-performance)
+18. [Seeded topics (codebook mode)](#18-seeded-topics-codebook-mode)
+19. [Research toolkit](#19-research-toolkit)
 
 ---
 
@@ -160,7 +162,10 @@ All topics are scored in one sparse product; `build_hierarchy()` and `divide()` 
 - `topic_embeddings_`: mean of the unrefined embeddings per topic.
 - `probabilities_` (`soft_assignment_method="centroid"`): `softmax(cos(x, centroids) · softmax_temperature)`
   (temperature 5). With `"graph"`, the topic distribution of a document's weighted graph neighbours.
-- `transform(docs)`: encode, nearest centroid by cosine; below `outlier_threshold` (0.35) → -1.
+- `transform(docs)`: encode, nearest centroid by cosine; below the outlier threshold → -1. By default
+  (`outlier_threshold=None`) the threshold is calibrated on the training data: the 1st percentile of the
+  training documents' similarity to their own centroid (`model.outlier_threshold_`). The fixed 0.35 used up
+  to 2.4 rejected up to 40% of in-domain documents on the benchmark corpora, the calibrated rule about 1%.
   `transform_proba(docs)` returns the softmax distribution.
 
 ## 9. Post-fit operations
@@ -260,6 +265,7 @@ runs requests in parallel, retries on 429/5xx and caches identical requests.
 | `assign_documents(model, docs, client)` | choice | Assign documents to topics (label + keywords + 2 example snippets; with many topics the 10 nearest centroids are the candidates). `allow_other=True` adds an abstain option. |
 | `reduce_outliers(strategy="decisions")` | choice | As above with the abstain option; abstaining keeps the outlier. |
 | `suggest_merges(model, client)`, `apply_merges` | predicate | Asks for the most similar topic pairs whether they describe the same theme. |
+| `intercoder_reliability(model, client, sample_size=200)` | choice | The LLM codes a random sample like a second human coder (labels, descriptions, keywords only). Returns `IntercoderResult`: Cohen's kappa, agreement, per-topic precision/recall/F1, confusion matrix. |
 
 Measured on the evaluation splits: LLM topic rating 2.21 for TriTopic vs. 1.94 (BERTopic tuned) and 0.49
 (default); assignment accuracy 0.657 vs. 0.648 for nearest-centroid, about 74% on the documents it does not
@@ -313,7 +319,10 @@ Standalone in `tritopic.utils.metrics`: `compute_coherence`, `compute_coherence_
 | `keyword_method` | `"ctfidf"` | or `"bm25"`, `"keybert"` |
 | `soft_assignment_method` | `"centroid"` | or `"graph"` |
 | `softmax_temperature` | 5.0 | Sharpness of probabilities |
-| `outlier_threshold` | 0.35 | `transform()` cut-off |
+| `outlier_threshold` | None | `transform()` cut-off; None = calibrated (1st percentile of training similarities) |
+| `seed_anchors` | None | Anchor documents per seed; None = 1% of the corpus, clipped to 5-30 |
+| `seed_keyword_weight` | 0.5 | Weight of the seed words vs. semantic similarity when picking anchors |
+| `seed_aware_resolution` | False | Anchored resolution scan (tested worse, off) |
 | `random_state`, `verbose` | 42, True | |
 
 ## 16. Design decisions and the evidence behind them
@@ -329,6 +338,11 @@ Standalone in `tritopic.utils.metrics`: `compute_coherence`, `compute_coherence_
 | Coherence-based auto resolution with share guard | NMI 0.594 vs. 0.565 (fixed 0.3); worst run 0.390 vs. 0.041 without the guard |
 | No size penalty in `reduce_topics` | 2k → k: NMI 0.632 vs. 0.492 (dev), 0.591 vs. 0.542 (evaluation) |
 | `gpt-6-luna` for interpretation | Most mixed topics found, best refine() gain |
+| Seeds as fixed Leiden memberships | Full codebook: NMI 0.625 → 0.661, ARI 0.515 → 0.624 (dev); held-out ARI 0.399 → 0.498 |
+| Seed-aware resolution scan off | The anchored scan chose worse partitions than the plain scan |
+| Bootstrap reliability as default | Spearman rho with purity 0.42 vs. 0.26 for the consensus variant |
+| Exact accumulation curve for saturation | Michaelis-Menten extrapolation was unstable (AG News: 69 estimated topics) |
+| Calibrated `transform()` threshold | About 1% vs. up to 40% rejected in-domain documents |
 
 All experiments are archived in [`benchmarks/experiments`](../benchmarks/experiments/README.md).
 
@@ -344,3 +358,51 @@ Fit times with pre-computed embeddings (one machine, sequential runs):
 
 The one-time UMAP fit dominates on short texts, tokenization on long ones. `TopicInterpreter` adds about
 2-3 s per topic of API time (parallelised over 8 workers).
+
+## 18. Seeded topics (codebook mode)
+
+`fit(documents, seeds={...})` starts from the topics you expect. A seed is either a one-sentence
+description (`"Sport news: football, rugby, tennis ..."`) or a list of words (`["football", "rugby"]`).
+
+1. **Anchors.** The seed texts are embedded with the model's embedding model. Each document gets the score
+   `cos(document, seed)`, for word-list seeds plus `seed_keyword_weight` (0.5) × the share of the seed words
+   present in the document. Every document competes for its best seed; the highest-scoring
+   `seed_anchors` documents of each seed (default 1% of the corpus, clipped to 5-30) become its anchors.
+   A seed that is no document's best match is ignored with a warning, which makes codebook categories that
+   are absent from the data visible.
+2. **Fixed memberships.** In every Leiden run (consensus, refinement, resolution search) the anchors start
+   in one community per seed and are passed to Leiden as `is_membership_fixed`. All other documents move
+   freely: they join a seeded community or form new ones.
+3. **Naming.** A topic whose anchors mostly come from one seed gets `TopicInfo.seed` and, until an LLM
+   relabels it, `label = seed name`. `seed_topics_` and `emergent_topics_` split the result;
+   `get_topic_info()` has a `Seed` column; `seed_anchors_` lists the anchor documents. Seeds survive
+   `save()`/`load()`.
+
+With pre-computed document embeddings, pass `seed_embeddings` (one vector per seed, same model) or let
+TriTopic encode the seeds with `embedding_model`; a dimension mismatch raises an error.
+
+Results: full codebook on the dev splits NMI 0.625 → 0.661, ARI 0.515 → 0.624; held-out ARI 0.399 → 0.498;
+81% of the anchors belong to the seed's true class; with half of the classes seeded ARI +17%. BBC demo: NMI
+0.742 → 0.801, ARI 0.631 → 0.800 with five one-line seeds. Limitation: with a partial codebook a seeded
+topic can absorb an unseeded neighbouring theme (BBC with three seeds: business and politics ended up in one
+emergent topic). Seed every theme you know, or run `TopicInterpreter.refine()` afterwards.
+
+## 19. Research toolkit
+
+`tritopic.research` turns a fitted model into the numbers and material a paper needs. Nothing here calls an
+LLM unless marked.
+
+| Function | Returns | How |
+|---|---|---|
+| `topic_reliability(model, method="bootstrap", n_boot=5, sample_frac=0.8)` | `topic, label, size, reliability, core_share, reliable`; sets `model.document_stability_` | Refits on random 80% samples and matches each topic to its best-overlapping refit topic (Jaccard; Greene et al., 2014). `method="consensus"` reuses the Leiden runs: instant but weaker. Topics ≥ 0.7 were 77% pure, topics < 0.5 only 54% (4 corpora). |
+| `saturation_curve(model, fractions=None, method="accumulation", min_docs=None)` | `SaturationResult`: `summary`, `point_95`, `point_all`, `novelty`, `late_topics`, `saturated` | Expected share of topics with at least `min_docs` documents in a random subsample, exact via the hypergeometric distribution: a topic accumulation curve. `method="refit"` refits on subsamples instead. Benchmarks: 95% of the topics visible after 25-35% of the data, all after 45-65%. `plot_saturation(result)` |
+| `bridge_documents(model, top_n=20, min_share=0.25)` | `doc, topic, other_topic, own_share, bridge_score, text` | Share of a document's nearest-neighbour weight (directed kNN in embedding space) that points into another topic. |
+| `topic_connections(model)` | `topic_a, topic_b, strength, bridge_docs` | `W_ab / sqrt(W_a · W_b)` of the cross-topic neighbour weight. |
+| `topic_prevalence(model, groups=None, ci=0.95, method="wilson")` | `topic, label, group, n, count, share, ci_low, ci_high` | Wilson score interval, or `method="bootstrap"`. |
+| `compare_groups(model, groups, alpha=0.05)` | `share[<group>]` columns, `difference`, `odds_ratio`, `cramers_v`, `p_value`, `p_adjusted`, `significant` | χ² test per topic (Fisher's exact test for 2 groups with small counts), Benjamini-Hochberg across topics. |
+| `distinctive_keywords(model, groups, group_a, group_b, topic_id=None, n=10)` | `word, z, typical_for` | Log-odds ratio with informative Dirichlet prior ("Fightin' Words", Monroe et al., 2008), overall or within one topic. |
+| `topic_evolution(model, timestamps, freq="Q", link_threshold=0.8)` | `TopicEvolution`: `nodes`, `links`, `events`, `lineage(topic)` | Clusters each period's part of the graph at the model's resolution, links topics of consecutive periods by centroid cosine and labels birth, continuation, split, merge, death. `plot_evolution(evo)` draws a Sankey diagram. |
+| `topic_quotes(model, topic_id=None, n=3)` | `topic, rank, quote, doc, score` | Sentences from the topic's most central documents, ranked by similarity to the topic plus a keyword bonus; one quote per document, near-duplicates skipped. Works on lower-cased text. |
+| `methods_report(model, corpus="the corpus", fmt="markdown")` | text | Methods paragraph and parameter table written from the fitted model (embedding model, views, resolution choice, quality metrics, software versions). Reproducible, no LLM. |
+| `TopicInterpreter.codebook(model, n_quotes=3)` (LLM) | `topic, size, name, definition, inclusion, exclusion, coding_notes, anchor_examples` | One codebook entry per topic for qualitative content analysis (Mayring); exclusion criteria name the neighbouring category; anchors are real quotes. Stored as `model.codebook_`. |
+| `intercoder_reliability(model, client)` (LLM) | `IntercoderResult` | See §13. BBC demo: kappa 0.94 on 150 articles. |

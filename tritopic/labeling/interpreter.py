@@ -371,6 +371,59 @@ class TopicInterpreter:
             self.interpret(model, topics=[t for t in new_ids if model.get_topic(t) is not None])
         return log
 
+    CODEBOOK_SCHEMA = {
+        "type": "object", "additionalProperties": False,
+        "required": ["name", "definition", "inclusion", "exclusion", "coding_notes"],
+        "properties": {
+            "name": {"type": "string", "description": "Category name, 2-5 words"},
+            "definition": {"type": "string", "description": "2-3 sentences defining the category"},
+            "inclusion": {"type": "array", "items": {"type": "string"},
+                          "description": "Criteria: when a document belongs to this category"},
+            "exclusion": {"type": "array", "items": {"type": "string"},
+                          "description": "Criteria: when it does NOT belong, naming the neighbouring category to use instead"},
+            "coding_notes": {"type": "string", "description": "One sentence on borderline cases"},
+        },
+    }
+
+    def codebook(self, model, n_quotes: int = 3, topics: list[int] | None = None):
+        """
+        Codebook for qualitative content analysis (in the style of Mayring):
+        per topic a name, definition, inclusion and exclusion criteria (the
+        latter refer to the neighbouring categories), coding notes, and anchor
+        examples.  Anchor examples are real sentences from the documents
+        (:func:`tritopic.research.topic_quotes`), not generated text.
+
+        Returns a DataFrame (also stored as ``model.codebook_``); export it
+        with ``to_excel`` / ``to_markdown`` and use it for manual coding.
+        """
+        import pandas as pd
+        from tritopic.research.quotes import topic_quotes
+
+        ids = topics or [t.topic_id for t in model.topics_ if t.topic_id != -1]
+        quotes = topic_quotes(model, n=n_quotes)
+        system = (f"You write codebook entries for qualitative content analysis (Mayring). Write in {self.language}. "
+                  "Base the definition and criteria on the evidence. Exclusion criteria must say which "
+                  "neighbouring category to code instead and why.")
+
+        def one(tid):
+            topic = model.get_topic(tid)
+            user, _ = self._prompt(model, topic)
+            q = quotes[quotes.topic == tid].quote.tolist()
+            if topic.label:
+                user = f"Current label: {topic.label}\n" + user
+            anchors = "\n".join(f"- {x}" for x in q)
+            r = self._complete(system, f"{user}\n\nAnchor examples:\n{anchors}",
+                               self.CODEBOOK_SCHEMA, "codebook_entry")
+            return dict(topic=tid, size=topic.size, name=r["name"], definition=r["definition"],
+                        inclusion=r["inclusion"], exclusion=r["exclusion"], coding_notes=r["coding_notes"],
+                        anchor_examples=q)
+
+        with ThreadPoolExecutor(max_workers=self.max_workers) as pool:
+            rows = list(pool.map(one, ids))
+        df = pd.DataFrame(rows)
+        model.codebook_ = df
+        return df
+
     def summarize(self, model) -> str:
         """Short overview of the whole topic landscape (uses existing labels/interpretations)."""
         topics = [t for t in model.topics_ if t.topic_id != -1]

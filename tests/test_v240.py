@@ -203,3 +203,10 @@ def test_resolution_persists_through_save_load(clustered, tmp_path):
     loaded = TriTopic.load(str(path))
     assert loaded.resolution_ == model.resolution_
     assert loaded.resolution_search_ == model.resolution_search_
+
+
+def test_auto_resolution_verbose_output(clustered, capsys):
+    """Regression: verbose=True crashed in the auto-resolution progress line."""
+    docs, _, emb = clustered
+    TriTopic(config=TriTopicConfig(verbose=True, use_dim_reduction=False, n_neighbors=10)).fit(docs, embeddings=emb)
+    assert "Auto resolution" in capsys.readouterr().out

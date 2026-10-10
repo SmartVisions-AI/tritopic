@@ -1,5 +1,47 @@
 # Changelog
 
+## 2.5.0 (October 2026)
+
+Codebook mode and a research toolkit: start from the topics you expect, and get the reliability,
+saturation, group-comparison and reporting outputs a paper needs.
+
+### New
+
+- **Seeded topics (codebook mode)**: `fit(documents, seeds={"name": "description" | [words]})`. The
+  documents that match a seed best are pinned to one Leiden community per seed (`is_membership_fixed`);
+  all other documents join a seeded topic or form emergent ones. `TopicInfo.seed`, `seed_topics_`,
+  `emergent_topics_`, `seed_anchors_`, a `Seed` column in `get_topic_info()`; `seed_embeddings` for
+  pre-computed embeddings; config `seed_anchors`, `seed_keyword_weight`. Full codebook on the dev splits:
+  NMI 0.625 → 0.661, ARI 0.515 → 0.624; held-out ARI 0.399 → 0.498.
+- **`tritopic.research`**:
+  - `topic_reliability()`: bootstrap refits (default) or consensus runs; reliability and core share per
+    topic, `document_stability_` per document. Reliable topics (≥ 0.7) were 77% pure vs. 54% below 0.5.
+  - `saturation_curve()` / `plot_saturation()`: exact topic accumulation curve (hypergeometric), saturation
+    points for 95% and 100% of the topics, optional refit method.
+  - `bridge_documents()`, `topic_connections()`: documents and links between topics.
+  - `topic_prevalence()` with Wilson or bootstrap intervals; `compare_groups()` with χ²/Fisher tests,
+    Cramér's V, odds ratios and Benjamini-Hochberg correction; `distinctive_keywords()` (log-odds with
+    informative prior).
+  - `topic_evolution()` / `plot_evolution()`: per-period topics linked into births, splits, merges, deaths.
+  - `topic_quotes()`: citable sentences per topic.
+  - `methods_report()`: methods paragraph and parameter table from the fitted model.
+- **`TopicInterpreter.codebook()`**: codebook entries for qualitative content analysis (definition,
+  inclusion/exclusion criteria, coding notes) with real anchor quotes.
+- **`intercoder_reliability()`** (Decisions API): an LLM as independent second coder; Cohen's kappa,
+  per-topic precision/recall/F1, confusion matrix. BBC demo: kappa 0.94.
+- Examples `09_seeded_topics.py`, `10_research_toolkit.py`, `11_codebook_and_second_coder.py`; user guide
+  `docs/user_guide.md`; BBC demo extended with all new outputs.
+
+### Changed
+
+- `transform()` outlier threshold is calibrated on the training data by default
+  (`outlier_threshold=None` → 1st percentile of the training similarities, `model.outlier_threshold_`).
+  The fixed 0.35 rejected up to 40% of in-domain documents; the calibrated rule about 1%.
+
+### Fixed
+
+- `fit(verbose=True)` with automatic resolution crashed when printing the scan summary.
+
 ## 2.4.0 (October 2026)
 
 Head-to-head with BERTopic on identical embeddings: NMI 0.582 vs. 0.439, ARI 0.440 vs. 0.285, keyword NPMI

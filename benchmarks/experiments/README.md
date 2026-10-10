@@ -1,8 +1,10 @@
-# Experiments behind TriTopic 2.4
+# Experiments behind TriTopic 2.4 (archived as run)
 
-How the 2.4 design decisions were made (October 2026). The experiment scripts and raw results are archived
-with the maintainer; the reusable tools are one level up: `benchmarks/compare_bertopic.py`, `summarize.py`,
-`results_to_markdown.py`, `llm_eval.py`.
+These scripts document how the 2.4 design decisions were made (October 2026). They were run from a
+temporary working directory, so paths inside them (`h2h.py`, `h2h_cache/`, absolute Dropbox paths) must be
+adjusted before re-running. The maintained, reusable tools are one level up:
+`benchmarks/compare_bertopic.py`, `summarize.py`, `results_to_markdown.py`, `llm_eval.py`.
+Raw results live in `benchmark_outputs/2.4/` (CSV files are not in git).
 
 Rule used throughout: **decide on the dev splits** (20NG test, BBC test, AG News train sample, arXiv
 validation), **evaluate once on the paper splits** (the datasets/sizes of `run_benchmark.py`).

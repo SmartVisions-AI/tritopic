@@ -433,3 +433,52 @@ def apply_merges(model, merges: Sequence[tuple[int, int, float]]):
     finally:
         model.config.verbose = verbose
     return model
+
+
+# ----------------------------------------------------------------------------
+# 4. Inter-coder reliability (LLM as second coder)
+# ----------------------------------------------------------------------------
+
+@dataclass
+class IntercoderResult:
+    kappa: float               # Cohen's kappa between model and LLM
+    agreement: float           # share of identical assignments
+    n: int
+    per_topic: Any             # DataFrame: precision, recall, f1, support per topic
+    confusion: Any             # DataFrame: model topic x LLM topic
+
+    def __str__(self) -> str:
+        return f"Cohen's kappa {self.kappa:.3f}, agreement {self.agreement:.1%} (n = {self.n})"
+
+
+def intercoder_reliability(model, client: DecisionsClient, sample_size: int = 200,
+                           random_state: int = 0) -> IntercoderResult:
+    """
+    Agreement between TriTopic's assignment and an LLM acting as an
+    independent second coder.
+
+    A random sample of non-outlier documents is assigned by the LLM to the
+    model's topics (offered with label, description and keywords, as a coder
+    would see a codebook).  Reports Cohen's kappa, raw agreement, and
+    precision/recall/F1 per topic, the reliability figures reviewers expect
+    from manual coding studies (kappa > 0.6 substantial, > 0.8 almost perfect;
+    Landis & Koch, 1977).
+    """
+    import pandas as pd
+    from sklearn.metrics import cohen_kappa_score, confusion_matrix, precision_recall_fscore_support
+
+    labels = np.asarray(model.labels_)
+    pool = np.where(labels != -1)[0]
+    rng = np.random.default_rng(random_state)
+    idx = np.sort(rng.choice(pool, min(sample_size, len(pool)), replace=False))
+    emb = model.original_embeddings_ if model.original_embeddings_ is not None else model.embeddings_
+    llm, _ = assign_documents(model, [model.documents_[i] for i in idx], client, embeddings=emb[idx])
+    truth = labels[idx]
+    ids = [t.topic_id for t in model.topics_ if t.topic_id != -1]
+    p, r, f, sup = precision_recall_fscore_support(truth, llm, labels=ids, zero_division=0)
+    per = pd.DataFrame(dict(topic=ids, label=[model.get_topic(t).label for t in ids],
+                            precision=p, recall=r, f1=f, support=sup))
+    conf = pd.DataFrame(confusion_matrix(truth, llm, labels=ids), index=ids, columns=ids)
+    return IntercoderResult(kappa=float(cohen_kappa_score(truth, llm)), agreement=float(np.mean(truth == llm)),
+                            n=len(idx), per_topic=per, confusion=conf)
+

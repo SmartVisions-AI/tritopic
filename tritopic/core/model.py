@@ -36,6 +36,7 @@ class TopicInfo:
     description: str | None = None
     centroid: np.ndarray | None = None
     coherence: float | None = None
+    seed: str | None = None          # name of the seed this topic grew from (seeded fits)
 
 
 @dataclass
@@ -102,7 +103,17 @@ class TriTopicConfig:
     reduced_metric: str = "euclidean"
 
     # Outlier handling
-    outlier_threshold: float = 0.35
+    # transform(): new documents less similar than this to every centroid get -1.
+    # None (default) calibrates it on the training data: the 1st percentile of
+    # the training documents' similarity to their own topic centroid.
+    outlier_threshold: float | None = None
+
+    # Seeded topic modeling (fit(..., seeds=...))
+    seed_anchors: int | None = None        # anchor documents per seed (None: 1% of corpus, 5-30)
+    seed_keyword_weight: float = 0.5       # weight of seed-word matches vs. embedding similarity
+    # Auto resolution scan with the seed anchors fixed. Off: on the dev splits it lowered
+    # ARI (0.624 -> 0.526 with a full codebook) and collapsed partial codebooks.
+    seed_aware_resolution: bool = False
 
     # Soft assignment
     soft_assignment_method: Literal["centroid", "graph"] = "centroid"
@@ -255,6 +266,9 @@ class TriTopic:
         self._iteration_history: list[dict] = []
         self.resolution_: float = self.config.resolution
         self.resolution_search_: list[tuple[float, int, float]] = []
+        self.seeds_: dict = {}
+        self.seed_anchors_: dict[str, list[int]] = {}
+        self._anchors: np.ndarray | None = None
         self._dim_reducer: Any | None = None
         
     def fit(
@@ -262,6 +276,8 @@ class TriTopic:
         documents: list[str],
         embeddings: np.ndarray | None = None,
         metadata: pd.DataFrame | None = None,
+        seeds: dict[str, str | list[str]] | None = None,
+        seed_embeddings: np.ndarray | None = None,
     ) -> "TriTopic":
         """
         Fit the topic model to documents.
@@ -274,7 +290,16 @@ class TriTopic:
             Pre-computed embeddings. If None, computed automatically.
         metadata : pd.DataFrame, optional
             Document metadata for the metadata view.
-            
+        seeds : dict, optional
+            Topics you expect, as ``{name: description}`` or
+            ``{name: [seed words]}``.  The documents that match a seed best
+            are pinned to one topic per seed (Leiden fixed membership); all
+            other documents either join a seeded topic or form new, emergent
+            topics.  See ``seed_topics_`` / ``emergent_topics_``.
+        seed_embeddings : np.ndarray, optional
+            Embeddings of the seed texts, required when *embeddings* come
+            from a different model than ``config.embedding_model``.
+
         Returns
         -------
         self : TriTopic
@@ -344,6 +369,13 @@ class TriTopic:
             if self.config.verbose:
                 print("   > Building metadata similarity graph...")
             self._metadata_graph = self._graph_builder.build_metadata_graph(metadata)
+
+        # Step 3.4: Seeds -> anchor documents
+        self.seeds_ = dict(seeds) if seeds else {}
+        self.seed_anchors_ = {}
+        self._anchors = None
+        if seeds:
+            self._anchors = self._select_seed_anchors(seeds, documents, seed_embeddings)
 
         # Step 3.5: Choose the Leiden resolution
         self.resolution_ = self.config.resolution
@@ -419,6 +451,7 @@ class TriTopic:
         self.labels_ = self._clusterer.fit_predict(
             self.graph_,
             min_cluster_size=self.config.min_cluster_size,
+            anchors=getattr(self, "_anchors", None),
         )
     
     def _fit_iterative(
@@ -468,6 +501,7 @@ class TriTopic:
             self.labels_ = self._clusterer.fit_predict(
                 self.graph_,
                 min_cluster_size=self.config.min_cluster_size,
+                anchors=getattr(self, "_anchors", None),
             )
 
             n_topics_found = len(np.unique(self.labels_[self.labels_ != -1]))
@@ -544,11 +578,20 @@ class TriTopic:
 
         lo, hi = self.config.resolution_range or (0.01, 1.0)
         search = []
+        anchored = None
+        if getattr(self, "_anchors", None) is not None and self.config.seed_aware_resolution:
+            # Scan with the seed anchors in place, so the chosen granularity
+            # fits the seeded partition rather than the unseeded one
+            anchored = ConsensusLeiden(n_runs=1, random_state=self.config.random_state)
+            anchored._anchors = self._anchors
         for res in np.geomspace(lo, hi, self.config.auto_resolution_steps):
-            labels = np.array(la.find_partition(
-                graph, la.RBConfigurationVertexPartition, weights="weight",
-                resolution_parameter=float(res), seed=self.config.random_state,
-            ).membership)
+            if anchored is not None:
+                labels = anchored._run_leiden(graph, float(res), 1)[0]
+            else:
+                labels = np.array(la.find_partition(
+                    graph, la.RBConfigurationVertexPartition, weights="weight",
+                    resolution_parameter=float(res), seed=self.config.random_state,
+                ).membership)
             sizes = np.bincount(labels)
             labels[sizes[labels] < self.config.min_cluster_size] = -1
             n_found = len(set(labels.tolist()) - {-1})
@@ -570,10 +613,93 @@ class TriTopic:
         chosen = min(r for r, _, c, _ in candidates if c >= threshold)
 
         if self.config.verbose:
-            n_at = next(n for r, n, _ in search if r == chosen)
+            n_at = next(n for r, n, _, _ in search if r == chosen)
             print(f"   > Auto resolution: {chosen:.3f} (~{n_at} topics, "
                   f"scanned {len(search)} resolutions by keyword coherence)")
         return chosen
+
+    @property
+    def outlier_threshold_(self) -> float:
+        """Similarity threshold used by ``transform()`` (configured or calibrated)."""
+        if self.config.outlier_threshold is not None:
+            return float(self.config.outlier_threshold)
+        base = self.original_embeddings_ if self.original_embeddings_ is not None else self.embeddings_
+        ids = [t.topic_id for t in self.topics_ if t.topic_id != -1]
+        if base is None or self.topic_embeddings_ is None or not ids:
+            return 0.0
+        from sklearn.metrics.pairwise import cosine_similarity
+        sims = cosine_similarity(base, self.topic_embeddings_)
+        col = {tid: j for j, tid in enumerate(ids)}
+        own = [sims[i, col[l]] for i, l in enumerate(self.labels_) if l in col]
+        return float(np.percentile(own, 1)) if own else 0.0
+
+    @property
+    def seed_topics_(self) -> dict[str, int]:
+        """Seed name -> topic id for seeded fits."""
+        return {t.seed: t.topic_id for t in self.topics_ if t.seed}
+
+    @property
+    def emergent_topics_(self) -> list[int]:
+        """Topics that did not grow from a seed (in seeded fits: the new themes)."""
+        return [t.topic_id for t in self.topics_ if t.topic_id != -1 and not t.seed]
+
+    def _select_seed_anchors(
+        self,
+        seeds: dict[str, str | list[str]],
+        documents: list[str],
+        seed_embeddings: np.ndarray | None = None,
+    ) -> np.ndarray:
+        """
+        Pick the anchor documents of each seed.
+
+        Score = cosine(document, seed text) + ``seed_keyword_weight`` x share of
+        the seed words present in the document (word seeds only).  Each
+        document competes for its best seed; the highest-scoring documents
+        of each seed become its anchors.
+        """
+        names = list(seeds)
+        texts = [v if isinstance(v, str) else " ".join(v) for v in seeds.values()]
+        base = self.original_embeddings_
+        if seed_embeddings is None:
+            seed_embeddings = self._embedding_engine.encode(texts)
+        seed_embeddings = np.asarray(seed_embeddings, dtype=float)
+        if seed_embeddings.shape[1] != base.shape[1]:
+            raise ValueError(
+                f"Seed embeddings have {seed_embeddings.shape[1]} dimensions, document embeddings "
+                f"{base.shape[1]}. Pass seed_embeddings= computed with the model that produced the "
+                "document embeddings."
+            )
+        E = base / (np.linalg.norm(base, axis=1, keepdims=True) + 1e-12)
+        S = seed_embeddings / (np.linalg.norm(seed_embeddings, axis=1, keepdims=True) + 1e-12)
+        score = E @ S.T
+
+        kx = self._keyword_extractor
+        doc_term = kx.fit_corpus(documents)
+        index = {w: i for i, w in enumerate(kx._vocabulary)}
+        for j, value in enumerate(seeds.values()):
+            if isinstance(value, str):
+                continue
+            cols = [index[w.lower()] for w in value if w.lower() in index]
+            if cols:
+                present = (doc_term[:, cols] > 0).toarray().mean(axis=1)
+                score[:, j] += self.config.seed_keyword_weight * present
+
+        n = len(documents)
+        k = self.config.seed_anchors or int(np.clip(round(0.01 * n), 5, 30))
+        best = score.argmax(axis=1)
+        anchors = -np.ones(n, dtype=int)
+        for j, name in enumerate(names):
+            cand = np.where(best == j)[0]
+            if len(cand) == 0:
+                warnings.warn(f"Seed '{name}' matches no document best; it is ignored.")
+                self.seed_anchors_[name] = []
+                continue
+            chosen = cand[np.argsort(-score[cand, j])[:k]]
+            anchors[chosen] = j
+            self.seed_anchors_[name] = [int(i) for i in chosen]
+        if self.config.verbose:
+            print(f"   > Seeds: {len(names)} ({k} anchor documents each)")
+        return anchors
 
     def _auto_resolve_topic_count(
         self,
@@ -623,6 +749,7 @@ class TriTopic:
         self.labels_ = self._clusterer.fit_predict(
             graph,
             min_cluster_size=self.config.min_cluster_size,
+            anchors=getattr(self, "_anchors", None),
             resolution=best_res,
         )
 
@@ -822,14 +949,21 @@ class TriTopic:
             else:
                 representative_docs = [int(i) for i in topic_indices[:self.config.n_representative_docs]]
 
+            seed = None
+            if label != -1:
+                for name, anchor_ids in (getattr(self, "seed_anchors_", None) or {}).items():
+                    if anchor_ids and np.mean(self.labels_[anchor_ids] == label) > 0.5:
+                        seed = name
+                        break
             topic_info = TopicInfo(
                 topic_id=int(label),
                 size=int(mask.sum()),
                 keywords=keywords,
                 keyword_scores=scores,
                 representative_docs=representative_docs,
-                label=None,
+                label=seed,
                 description=None,
+                seed=seed,
             )
             self.topics_.append(topic_info)
 
@@ -1195,9 +1329,11 @@ class TriTopic:
         documents: list[str],
         embeddings: np.ndarray | None = None,
         metadata: pd.DataFrame | None = None,
+        seeds: dict[str, str | list[str]] | None = None,
+        seed_embeddings: np.ndarray | None = None,
     ) -> np.ndarray:
         """
-        Fit the model and return topic assignments.
+        Fit the model and return topic assignments (see :meth:`fit`).
 
         Parameters
         ----------
@@ -1213,7 +1349,7 @@ class TriTopic:
         labels : np.ndarray
             Topic assignment for each document. -1 indicates outlier.
         """
-        self.fit(documents, embeddings, metadata)
+        self.fit(documents, embeddings, metadata, seeds=seeds, seed_embeddings=seed_embeddings)
         return self.labels_
     
     def transform(self, documents: list[str]) -> np.ndarray:
@@ -1245,7 +1381,7 @@ class TriTopic:
         max_sim = sim_matrix[np.arange(len(documents)), nearest_idx]
 
         labels = topic_ids[nearest_idx]
-        labels[max_sim < self.config.outlier_threshold] = -1
+        labels[max_sim < self.outlier_threshold_] = -1
 
         return labels
 
@@ -1321,7 +1457,7 @@ class TriTopic:
         if strategy == "embeddings":
             from sklearn.metrics.pairwise import cosine_similarity
 
-            thresh = threshold if threshold is not None else self.config.outlier_threshold
+            thresh = threshold if threshold is not None else self.outlier_threshold_
             non_outlier_topics = [t for t in self.topics_ if t.topic_id != -1]
             # Same space as topic_embeddings_ (original, unrefined)
             base_emb = self.original_embeddings_ if self.original_embeddings_ is not None else self.embeddings_
@@ -1528,6 +1664,7 @@ class TriTopic:
                 "Description": topic.description,
                 "Representative_Docs": topic.representative_docs,
                 "Coherence": topic.coherence,
+                "Seed": topic.seed,
             })
         
         return pd.DataFrame(data)
@@ -1752,6 +1889,8 @@ class TriTopic:
             "_is_fitted": self._is_fitted,
             "_iteration_history": self._iteration_history,
             "resolution_": self.resolution_,
+            "seeds_": getattr(self, "seeds_", {}),
+            "seed_anchors_": getattr(self, "seed_anchors_", {}),
             "resolution_search_": self.resolution_search_,
             "_dim_reducer": self._dim_reducer,
             "_keyword_extractor_state": {
@@ -1797,6 +1936,8 @@ class TriTopic:
         model._is_fitted = state["_is_fitted"]
         model._iteration_history = state["_iteration_history"]
         model.resolution_ = state.get("resolution_", config.resolution)
+        model.seeds_ = state.get("seeds_", {})
+        model.seed_anchors_ = state.get("seed_anchors_", {})
         model.resolution_search_ = state.get("resolution_search_", [])
         model._dim_reducer = state.get("_dim_reducer")
 

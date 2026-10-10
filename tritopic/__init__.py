@@ -9,7 +9,9 @@ Fuses three views of a corpus into one document graph:
 
 and finds topics with consensus Leiden clustering. Keywords come from a
 coverage-weighted c-TF-IDF; an optional LLM (``TopicInterpreter``) labels,
-explains and checks the topics.
+explains and checks the topics. Topics can be seeded from a codebook, and
+``tritopic.research`` adds reliability, saturation, bridges, prevalence,
+group comparisons, topic evolution, quotes and a methods report.
 
 Basic usage:
 -----------
@@ -22,7 +24,7 @@ Author: Roman Egger
 License: MIT
 """
 
-__version__ = "2.4.0"
+__version__ = "2.5.0"
 __author__ = "Roman Egger"
 
 from tritopic.core.model import TriTopic, TriTopicConfig, TopicInfo
